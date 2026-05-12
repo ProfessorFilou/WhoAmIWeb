@@ -1,0 +1,1962 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhoAmIWeb — Dein digitaler Fingerabdruck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg2: #111118;
+    --bg3: #1a1a24;
+    --accent: #00ff88;
+    --accent2: #ff3366;
+    --accent3: #00aaff;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --border: rgba(0,255,136,0.15);
+    --red: #ff3366;
+    --yellow: #ffcc00;
+    --mono: 'Space Mono', monospace;
+    --display: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.05) 2px,
+      rgba(0,0,0,0.05) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 2rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(10,10,15,0.95);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--accent); }
+
+  .status-bar {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    font-size: 0.72rem;
+    color: var(--text2);
+  }
+  .pulse {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    display: inline-block;
+    margin-right: 6px;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,255,136,0.4); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(0,255,136,0); }
+  }
+
+  .main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 3rem 4rem;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2rem;
+  }
+
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+  }
+
+  .hero h1 .highlight { color: var(--accent); }
+  .hero h1 .highlight2 { color: var(--accent2); }
+
+  .hero-sub {
+    color: var(--text2);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .ip-display {
+    margin: 2rem auto;
+    display: inline-block;
+    background: var(--bg3);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 1rem 2.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ip-display::before {
+    content: 'DEINE IP-ADRESSE';
+    position: absolute;
+    top: 4px;
+    left: 12px;
+    font-size: 0.6rem;
+    color: var(--text2);
+    letter-spacing: 0.15em;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .card:hover { border-color: rgba(0,255,136,0.35); }
+
+  .card-header {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(0,255,136,0.04);
+  }
+
+  .card-icon {
+    width: 28px; height: 28px;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.3);
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  .card-title {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .card-body { padding: 1.25rem; }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    gap: 1rem;
+  }
+  .info-row:last-child { border-bottom: none; }
+
+  .info-key {
+    color: var(--text2);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+
+  .info-val {
+    font-size: 0.78rem;
+    color: var(--text);
+    text-align: right;
+    word-break: break-all;
+  }
+
+  .info-val.accent { color: var(--accent); }
+  .info-val.danger { color: var(--red); }
+  .info-val.warn { color: var(--yellow); }
+  .info-val.info { color: var(--accent3); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .badge-green { background: rgba(0,255,136,0.15); color: var(--accent); border: 1px solid rgba(0,255,136,0.3); }
+  .badge-red { background: rgba(255,51,102,0.15); color: var(--red); border: 1px solid rgba(255,51,102,0.3); }
+  .badge-yellow { background: rgba(255,204,0,0.15); color: var(--yellow); border: 1px solid rgba(255,204,0,0.3); }
+  .badge-blue { background: rgba(0,170,255,0.15); color: var(--accent3); border: 1px solid rgba(0,170,255,0.3); }
+
+  #map {
+    width: 100%;
+    height: 380px;
+    border-radius: 0;
+    filter: grayscale(60%) brightness(0.7) hue-rotate(180deg);
+  }
+
+  .map-overlay { position: relative; }
+  .map-coords {
+    padding: 0.75rem 1.25rem;
+    background: var(--bg3);
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 2rem;
+    font-size: 0.72rem;
+    flex-wrap: wrap;
+  }
+  .map-coords span { color: var(--text2); margin-right: 0.5rem; }
+
+  .map-loading {
+    height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text2);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    background: var(--bg3);
+  }
+
+  .loading-text { color: var(--text2); font-size: 0.75rem; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .section-label {
+    font-size: 0.65rem;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .warning-box {
+    background: rgba(255,51,102,0.06);
+    border: 1px solid rgba(255,51,102,0.25);
+    border-radius: 2px;
+    padding: 1rem 1.25rem;
+    margin-top: 2rem;
+    font-size: 0.72rem;
+    color: var(--text2);
+    line-height: 1.7;
+  }
+  .warning-box strong { color: var(--red); display: block; margin-bottom: 0.5rem; font-size: 0.8rem; }
+
+  .scan-anim { position: relative; overflow: hidden; }
+  .scan-anim::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 3s linear infinite;
+    top: 0;
+  }
+  @keyframes scan {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  table.data-table td, table.data-table th {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    text-align: left;
+  }
+  table.data-table th {
+    color: var(--text2);
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: rgba(0,255,136,0.03);
+  }
+  table.data-table tr:last-child td { border-bottom: none; }
+
+  /* Country flag emoji sizing */
+  .flag { font-size: 1.1em; }
+
+  @media (max-width: 700px) {
+    header, .main { padding-left: 1rem; padding-right: 1rem; }
+    .grid { grid-template-columns: 1fr; }
+    .map-coords { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<header>
+  <div class="logo">Who<span>Am</span>IWeb</div>
+  <div class="status-bar">
+    <span><span class="pulse"></span>LIVE SCAN AKTIV</span>
+    <span id="live-time">--:--:--</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="hero">
+    <h1>Alles, was das <span class="highlight">Internet</span> über<br>dich <span class="highlight2">weiß</span>.</h1>
+    <div class="hero-sub">Gesammelte Daten · Digitaler Fingerabdruck · Live-Standort</div>
+    <div class="ip-display" id="ip-box"><span class="loading-text">Wird geladen...</span></div>
+  </div>
+
+  <!-- Netz & Standort -->
+  <div class="section-label">01 / Netzwerk & Standort</div>
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🌐</div>
+        <div class="card-title">IP-Informationen</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">IPv4</span><span class="info-val accent" id="ip4"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">IPv6</span><span class="info-val" id="ip6"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ISP / Provider</span><span class="info-val" id="isp"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ASN</span><span class="info-val" id="asn">—</span></div>
+        <div class="info-row"><span class="info-key">Organisation</span><span class="info-val" id="org">—</span></div>
+        <div class="info-row"><span class="info-key">Hosting / Datacenter</span><span class="info-val" id="hosting">—</span></div>
+        <div class="info-row"><span class="info-key">Proxy / VPN</span><span class="info-val" id="proxy">—</span></div>
+        <div class="info-row"><span class="info-key">Tor-Knoten</span><span class="info-val" id="tor">—</span></div>
+        <div class="info-row"><span class="info-key">Reverse-DNS</span><span class="info-val" id="rdns"><span class="loading-text">…</span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📍</div>
+        <div class="card-title">Geografischer Standort</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Stadt</span><span class="info-val" id="city"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">Region / Bundesland</span><span class="info-val" id="region">—</span></div>
+        <div class="info-row"><span class="info-key">Land</span><span class="info-val" id="country">—</span></div>
+        <div class="info-row"><span class="info-key">Kontinent</span><span class="info-val" id="continent">—</span></div>
+        <div class="info-row"><span class="info-key">Postleitzahl</span><span class="info-val" id="postal">—</span></div>
+        <div class="info-row"><span class="info-key">Koordinaten</span><span class="info-val accent" id="coords">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="timezone">—</span></div>
+        <div class="info-row"><span class="info-key">Ortszeit (IP)</span><span class="info-val" id="localtime">—</span></div>
+        <div class="info-row"><span class="info-key">Genauigkeit</span><span class="info-val warn">~20–50 km Radius</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Karte -->
+  <div class="card scan-anim" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+      <div class="card-icon">🗺</div>
+      <div class="card-title">Live-Standortkarte (IP-basiert)</div>
+    </div>
+    <div class="map-overlay">
+      <div id="map-container">
+        <div class="map-loading" id="map-loading"><span class="loading-text">Karte wird geladen…</span></div>
+        <div id="map" style="display:none;"></div>
+      </div>
+      <div class="map-coords">
+        <div><span>LAT</span><span id="lat-display" style="color:var(--text)">—</span></div>
+        <div><span>LNG</span><span id="lng-display" style="color:var(--text)">—</span></div>
+        <div><span>STADT</span><span id="map-city" style="color:var(--text)">—</span></div>
+        <div><span>LAND</span><span id="map-country" style="color:var(--text)">—</span></div>
+        <div><span>QUELLE</span><span style="color:var(--text)">IP-Geolokalisierung</span></div>
+        <div><span>GENAUIGKEIT</span><span style="color:var(--yellow)">~20–50 km</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Browser & System -->
+  <div class="section-label">02 / Browser & Betriebssystem</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🖥</div>
+        <div class="card-title">Browser</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser</span><span class="info-val" id="browser-name">—</span></div>
+        <div class="info-row"><span class="info-key">Version</span><span class="info-val" id="browser-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Engine</span><span class="info-val" id="browser-engine">—</span></div>
+        <div class="info-row"><span class="info-key">Sprache</span><span class="info-val" id="browser-lang">—</span></div>
+        <div class="info-row"><span class="info-key">Alle Sprachen</span><span class="info-val" id="browser-langs">—</span></div>
+        <div class="info-row"><span class="info-key">DNT-Header</span><span class="info-val" id="dnt">—</span></div>
+        <div class="info-row"><span class="info-key">Cookies aktiv</span><span class="info-val" id="cookies">—</span></div>
+        <div class="info-row"><span class="info-key">JavaScript</span><span class="info-val accent">Aktiv ✓</span></div>
+        <div class="info-row"><span class="info-key">User-Agent</span><span class="info-val" id="ua" style="font-size:0.62rem;">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">💻</div>
+        <div class="card-title">Gerät & Betriebssystem</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Betriebssystem</span><span class="info-val" id="os">—</span></div>
+        <div class="info-row"><span class="info-key">OS-Version</span><span class="info-val" id="os-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Gerät</span><span class="info-val" id="device">—</span></div>
+        <div class="info-row"><span class="info-key">Gerätekategorie</span><span class="info-val" id="device-cat">—</span></div>
+        <div class="info-row"><span class="info-key">CPU-Kerne</span><span class="info-val" id="cpu-cores">—</span></div>
+        <div class="info-row"><span class="info-key">RAM (approx.)</span><span class="info-val" id="ram">—</span></div>
+        <div class="info-row"><span class="info-key">Plattform</span><span class="info-val" id="platform">—</span></div>
+        <div class="info-row"><span class="info-key">Touch-Gerät</span><span class="info-val" id="touch">—</span></div>
+        <div class="info-row"><span class="info-key">Max. Touch-Punkte</span><span class="info-val" id="touch-points">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bildschirm & Verbindung -->
+  <div class="section-label">03 / Bildschirm & Verbindung</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🖥</div>
+        <div class="card-title">Bildschirm</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Auflösung</span><span class="info-val accent" id="resolution">—</span></div>
+        <div class="info-row"><span class="info-key">Verfügbar</span><span class="info-val" id="avail-resolution">—</span></div>
+        <div class="info-row"><span class="info-key">Viewport</span><span class="info-val" id="viewport">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeldichte (DPR)</span><span class="info-val" id="dpr">—</span></div>
+        <div class="info-row"><span class="info-key">Farbtiefe</span><span class="info-val" id="color-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeltiefe</span><span class="info-val" id="pixel-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Orientierung</span><span class="info-val" id="orientation">—</span></div>
+        <div class="info-row"><span class="info-key">Dunkelmodus</span><span class="info-val" id="dark-mode">—</span></div>
+        <div class="info-row"><span class="info-key">HDR-Unterstützung</span><span class="info-val" id="hdr">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📡</div>
+        <div class="card-title">Verbindung & Netzwerk</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Verbindungstyp</span><span class="info-val" id="conn-type">—</span></div>
+        <div class="info-row"><span class="info-key">Effektiver Typ</span><span class="info-val" id="conn-eff">—</span></div>
+        <div class="info-row"><span class="info-key">Bandbreite</span><span class="info-val" id="bandwidth">—</span></div>
+        <div class="info-row"><span class="info-key">RTT (Latenz)</span><span class="info-val" id="rtt">—</span></div>
+        <div class="info-row"><span class="info-key">Data Saver</span><span class="info-val" id="data-saver">—</span></div>
+        <div class="info-row"><span class="info-key">Online-Status</span><span class="info-val accent" id="online">—</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (lokal)</span><span class="info-val danger" id="webrtc-local">Wird geprüft...</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (public)</span><span class="info-val danger" id="webrtc-public">Wird geprüft...</span></div>
+        <div class="info-row"><span class="info-key">HTTPS</span><span class="info-val" id="https">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sicherheit & Tracking -->
+  <div class="section-label">04 / Sicherheit & Datenschutz</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🔒</div>
+        <div class="card-title">Sicherheits-Check</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Ad-Blocker</span><span class="info-val" id="adblock">—</span></div>
+        <div class="info-row"><span class="info-key">Do Not Track</span><span class="info-val" id="dnt2">—</span></div>
+        <div class="info-row"><span class="info-key">Inkognito-Modus</span><span class="info-val" id="incognito">—</span></div>
+        <div class="info-row"><span class="info-key">LocalStorage</span><span class="info-val" id="localstorage">—</span></div>
+        <div class="info-row"><span class="info-key">SessionStorage</span><span class="info-val" id="sessionstorage">—</span></div>
+        <div class="info-row"><span class="info-key">IndexedDB</span><span class="info-val" id="indexeddb">—</span></div>
+        <div class="info-row"><span class="info-key">Service Worker</span><span class="info-val" id="sw">—</span></div>
+        <div class="info-row"><span class="info-key">WebAssembly</span><span class="info-val" id="wasm">—</span></div>
+        <div class="info-row"><span class="info-key">Flash</span><span class="info-val">Nicht verfügbar</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🍪</div>
+        <div class="card-title">Plugins & APIs</div>
+      </div>
+      <div class="card-body" id="plugins-body">
+        <div class="info-row"><span class="info-key">WebGL</span><span class="info-val" id="webgl">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Renderer</span><span class="info-val" id="webgl-renderer" style="font-size:0.65rem;">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Vendor</span><span class="info-val" id="webgl-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Canvas FP</span><span class="info-val" id="canvas-fp">—</span></div>
+        <div class="info-row"><span class="info-key">Audio API</span><span class="info-val" id="audio-api">—</span></div>
+        <div class="info-row"><span class="info-key">Kamera-Zugriff</span><span class="info-val" id="camera">—</span></div>
+        <div class="info-row"><span class="info-key">Mikrofon-Zugriff</span><span class="info-val" id="mic">—</span></div>
+        <div class="info-row"><span class="info-key">Benachrichtigungen</span><span class="info-val" id="notifs">—</span></div>
+        <div class="info-row"><span class="info-key">Geolokation API</span><span class="info-val" id="geo-api">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Zeitzone & Sonstiges -->
+  <div class="section-label">05 / Zeit, Akku & Sonstiges</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">⏰</div>
+        <div class="card-title">Zeit & Datum</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser-Zeit</span><span class="info-val accent" id="browser-time">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="tz">—</span></div>
+        <div class="info-row"><span class="info-key">UTC-Versatz</span><span class="info-val" id="utc-offset">—</span></div>
+        <div class="info-row"><span class="info-key">Sommerzeit aktiv</span><span class="info-val" id="dst">—</span></div>
+        <div class="info-row"><span class="info-key">Datumsformat</span><span class="info-val" id="date-format">—</span></div>
+        <div class="info-row"><span class="info-key">Wochentag</span><span class="info-val" id="weekday">—</span></div>
+        <div class="info-row"><span class="info-key">Uptime (Seite)</span><span class="info-val" id="uptime">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">🔋</div>
+        <div class="card-title">Akku & Hardware</div>
+      </div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Akkustand</span><span class="info-val" id="battery">—</span></div>
+        <div class="info-row"><span class="info-key">Ladeend</span><span class="info-val" id="battery-charging">—</span></div>
+        <div class="info-row"><span class="info-key">Ladezeit</span><span class="info-val" id="battery-time">—</span></div>
+        <div class="info-row"><span class="info-key">GPU (WebGL)</span><span class="info-val" id="gpu">—</span></div>
+        <div class="info-row"><span class="info-key">Speicherkapazität</span><span class="info-val" id="storage-est">—</span></div>
+        <div class="info-row"><span class="info-key">Freier Speicher</span><span class="info-val" id="storage-free">—</span></div>
+        <div class="info-row"><span class="info-key">Navigator Vendor</span><span class="info-val" id="nav-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Produkt</span><span class="info-val" id="nav-product">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fingerprint -->
+  <div class="section-label">06 / Digitaler Fingerabdruck</div>
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+      <div class="card-icon">🔍</div>
+      <div class="card-title">Browser-Fingerabdruck</div>
+    </div>
+    <div class="card-body">
+      <div class="info-row"><span class="info-key">Fingerabdruck-Hash</span><span class="info-val accent" id="fp-hash">Wird berechnet...</span></div>
+      <div class="info-row"><span class="info-key">Canvas-Hash</span><span class="info-val" id="canvas-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Audio-Hash</span><span class="info-val" id="audio-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Font-Hash</span><span class="info-val" id="font-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Erkannte Schriften</span><span class="info-val" id="fonts">—</span></div>
+      <div class="info-row"><span class="info-key">Einzigartigkeit</span><span class="info-val warn">Sehr hoch — du bist erkennbar</span></div>
+    </div>
+  </div>
+
+  <!-- Plugins Table -->
+  <div class="card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">
+      <div class="card-icon">🔌</div>
+      <div class="card-title">Browser-Plugins</div>
+    </div>
+    <div class="card-body">
+      <table class="data-table" id="plugin-table">
+        <thead><tr><th>Name</th><th>Beschreibung</th><th>Dateitypen</th></tr></thead>
+        <tbody id="plugin-rows"><tr><td colspan="3" style="color:var(--text2)">Wird geladen...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠ Datenschutz-Hinweis</strong>
+    Diese Seite speichert <em>keine</em> Daten und sendet nichts an Server. Alle angezeigten Informationen werden lokal in deinem Browser ausgelesen und dienen rein zu Demonstrationszwecken. Die IP-Geolokalisierung nutzt den öffentlichen Dienst ipapi.co. Die Reverse-DNS-Abfrage nutzt dns.google.
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const set = (id, val, cls) => {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = val || '—';
+  if (cls !== undefined) el.className = 'info-val ' + (cls || '');
+};
+
+// ─── Live clock ───────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  $('live-time').textContent = now.toLocaleTimeString('de-DE');
+  $('browser-time').textContent = now.toLocaleString('de-DE');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── Uptime ───────────────────────────────────────────────────────────────────
+const startTime = Date.now();
+setInterval(() => {
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  $('uptime').textContent = s + 's';
+}, 1000);
+
+// ─── User Agent parsing ───────────────────────────────────────────────────────
+function parseUA() {
+  const ua = navigator.userAgent;
+  $('ua').textContent = ua;
+
+  let browser = 'Unbekannt', version = '', engine = '';
+  if (/Edg\//.test(ua))          { browser = 'Microsoft Edge';  version = ua.match(/Edg\/([\d.]+)/)?.[1]     || ''; engine = 'Blink';  }
+  else if (/OPR\//.test(ua))     { browser = 'Opera';           version = ua.match(/OPR\/([\d.]+)/)?.[1]     || ''; engine = 'Blink';  }
+  else if (/YaBrowser/.test(ua)) { browser = 'Yandex Browser';  version = ua.match(/YaBrowser\/([\d.]+)/)?.[1]||''; engine = 'Blink'; }
+  else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) { browser = 'Google Chrome'; version = ua.match(/Chrome\/([\d.]+)/)?.[1] || ''; engine = 'Blink'; }
+  else if (/Firefox\//.test(ua)) { browser = 'Mozilla Firefox'; version = ua.match(/Firefox\/([\d.]+)/)?.[1] || ''; engine = 'Gecko';  }
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) { browser = 'Apple Safari'; version = ua.match(/Version\/([\d.]+)/)?.[1] || ''; engine = 'WebKit'; }
+  else if (/Chromium\//.test(ua)){ browser = 'Chromium';        version = ua.match(/Chromium\/([\d.]+)/)?.[1]|| ''; engine = 'Blink';  }
+
+  set('browser-name', browser);
+  set('browser-ver', version || '—');
+  set('browser-engine', engine || '—');
+
+  let os = 'Unbekannt', osVer = '';
+  if (/Windows NT 10/.test(ua))        { os = 'Windows';  osVer = '10 / 11'; }
+  else if (/Windows NT 6\.3/.test(ua)) { os = 'Windows';  osVer = '8.1'; }
+  else if (/Windows NT 6\.2/.test(ua)) { os = 'Windows';  osVer = '8'; }
+  else if (/Windows NT 6\.1/.test(ua)) { os = 'Windows';  osVer = '7'; }
+  else if (/Mac OS X ([\d_]+)/.test(ua)){ os = 'macOS';   osVer = ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.') || ''; }
+  else if (/Android ([\d.]+)/.test(ua)) { os = 'Android'; osVer = ua.match(/Android ([\d.]+)/)?.[1] || ''; }
+  else if (/iPhone OS ([\d_]+)/.test(ua)){ os = 'iOS';    osVer = ua.match(/iPhone OS ([\d_]+)/)?.[1]?.replace(/_/g, '.') || ''; }
+  else if (/iPad.*OS ([\d_]+)/.test(ua)) { os = 'iPadOS'; osVer = ua.match(/OS ([\d_]+)/)?.[1]?.replace(/_/g, '.') || ''; }
+  else if (/Linux/.test(ua))            { os = 'Linux'; }
+
+  set('os', os);
+  set('os-ver', osVer || 'Unbekannt');
+
+  const isMobile = /Mobi|Android/i.test(ua);
+  const isTablet = /iPad|Tablet/i.test(ua);
+  set('device', isTablet ? 'Tablet' : isMobile ? 'Smartphone' : 'Desktop / Laptop');
+  set('device-cat', isTablet ? 'Tablet' : isMobile ? 'Smartphone' : 'PC / Mac', isMobile ? '' : 'accent');
+}
+
+// ─── System info ──────────────────────────────────────────────────────────────
+function gatherSystem() {
+  set('browser-lang', navigator.language || navigator.userLanguage || '—');
+  set('browser-langs', (navigator.languages || [navigator.language]).join(', '));
+  set('dnt', navigator.doNotTrack === '1' ? '✓ Aktiv' : navigator.doNotTrack === '0' ? '✗ Deaktiviert' : 'Nicht gesetzt');
+  set('dnt2', navigator.doNotTrack === '1' ? '✓ Aktiv' : '✗ Inaktiv');
+  set('cookies', navigator.cookieEnabled ? '✓ Aktiviert' : '✗ Deaktiviert', navigator.cookieEnabled ? 'accent' : 'danger');
+  set('platform', navigator.platform || '—');
+  set('cpu-cores', navigator.hardwareConcurrency || '—');
+  set('ram', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Nicht verfügbar');
+  set('touch', navigator.maxTouchPoints > 0 ? '✓ Ja' : '✗ Nein');
+  set('touch-points', navigator.maxTouchPoints);
+  set('nav-vendor', navigator.vendor || '—');
+  set('nav-product', navigator.product || '—');
+}
+
+// ─── Screen info ──────────────────────────────────────────────────────────────
+function gatherScreen() {
+  set('resolution', screen.width + ' × ' + screen.height);
+  set('avail-resolution', screen.availWidth + ' × ' + screen.availHeight);
+  set('viewport', window.innerWidth + ' × ' + window.innerHeight);
+  set('dpr', (window.devicePixelRatio || 1) + 'x');
+  set('color-depth', screen.colorDepth + ' bit');
+  set('pixel-depth', screen.pixelDepth + ' bit');
+  const orient = screen.orientation?.type || (window.innerWidth > window.innerHeight ? 'landscape-primary' : 'portrait-primary');
+  set('orientation', orient);
+  set('dark-mode', window.matchMedia('(prefers-color-scheme: dark)').matches ? '✓ Aktiviert' : '✗ Deaktiviert');
+  set('hdr', window.matchMedia('(dynamic-range: high)').matches ? '✓ Unterstützt' : '—');
+}
+
+// ─── Timezone ─────────────────────────────────────────────────────────────────
+function gatherTime() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  set('tz', tz);
+  const offset = -new Date().getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const h = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0');
+  const m = (Math.abs(offset) % 60).toString().padStart(2, '0');
+  set('utc-offset', 'UTC ' + sign + h + ':' + m);
+  const jan = new Date(new Date().getFullYear(), 0, 1);
+  const jul = new Date(new Date().getFullYear(), 6, 1);
+  const isDST = new Date().getTimezoneOffset() < Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+  set('dst', isDST ? '✓ Ja (aktiv)' : '✗ Nein');
+  set('date-format', new Date(2025, 0, 15).toLocaleDateString(navigator.language || 'de-DE'));
+  set('weekday', new Date().toLocaleDateString('de-DE', { weekday: 'long' }));
+}
+
+// ─── Storage checks ───────────────────────────────────────────────────────────
+function gatherStorage() {
+  set('localstorage', typeof localStorage !== 'undefined' ? '✓ Verfügbar' : '✗ Gesperrt', 'accent');
+  set('sessionstorage', typeof sessionStorage !== 'undefined' ? '✓ Verfügbar' : '✗ Gesperrt', 'accent');
+  try { set('indexeddb', window.indexedDB ? '✓ Verfügbar' : '✗ Gesperrt', 'accent'); } catch(e) { set('indexeddb', '✗ Gesperrt', 'danger'); }
+  set('sw', 'serviceWorker' in navigator ? '✓ Unterstützt' : '—');
+  set('wasm', typeof WebAssembly !== 'undefined' ? '✓ Unterstützt' : '—', 'accent');
+  set('online', navigator.onLine ? '✓ Online' : '✗ Offline', navigator.onLine ? 'accent' : 'danger');
+  set('https', location.protocol === 'https:' ? '✓ Gesichert' : '⚠ Ungesichert', location.protocol === 'https:' ? 'accent' : 'warn');
+}
+
+// ─── Network Connection API ───────────────────────────────────────────────────
+function gatherNetwork() {
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn) {
+    set('conn-type', conn.type || '—');
+    set('conn-eff', conn.effectiveType || '—');
+    set('bandwidth', conn.downlink != null ? conn.downlink + ' Mbit/s' : '—');
+    set('rtt', conn.rtt != null ? conn.rtt + ' ms' : '—');
+    set('data-saver', conn.saveData ? '✓ Aktiv' : '✗ Inaktiv');
+  } else {
+    ['conn-type','conn-eff','bandwidth','rtt','data-saver'].forEach(id => set(id, 'Nicht verfügbar'));
+  }
+}
+
+// ─── WebRTC IP leak ───────────────────────────────────────────────────────────
+function detectWebRTC() {
+  if (!window.RTCPeerConnection) {
+    set('webrtc-local', 'Nicht unterstützt');
+    set('webrtc-public', 'Nicht unterstützt');
+    return;
+  }
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  const localIPs = new Set(), pubIPs = new Set();
+  pc.createDataChannel('');
+  pc.onicecandidate = e => {
+    if (!e.candidate) return;
+    const m = e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[\da-f:]{2,39})/gi);
+    if (!m) return;
+    m.forEach(ip => {
+      if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|fd|fc)/.test(ip)) localIPs.add(ip);
+      else if (!ip.startsWith('0.0.0.0') && ip !== '::1') pubIPs.add(ip);
+    });
+    set('webrtc-local', localIPs.size ? [...localIPs].join(', ') : '— (nicht leckend)', localIPs.size ? 'danger' : 'accent');
+    set('webrtc-public', pubIPs.size ? [...pubIPs].join(', ') : '— (nicht leckend)', pubIPs.size ? 'danger' : 'accent');
+  };
+  pc.createOffer().then(o => pc.setLocalDescription(o));
+  setTimeout(() => { pc.close(); }, 6000);
+}
+
+// ─── WebGL fingerprint ────────────────────────────────────────────────────────
+function gatherWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) { set('webgl', '✗ Nicht verfügbar', 'danger'); return; }
+    set('webgl', '✓ Unterstützt', 'accent');
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    if (ext) {
+      const renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '—';
+      const vendor   = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL)   || '—';
+      set('webgl-renderer', renderer);
+      set('webgl-vendor', vendor);
+      set('gpu', renderer);
+    } else {
+      set('webgl-renderer', gl.getParameter(gl.RENDERER) || '—');
+      set('webgl-vendor',   gl.getParameter(gl.VENDOR)   || '—');
+    }
+  } catch(e) { set('webgl', 'Fehler', 'danger'); }
+}
+
+// ─── Canvas fingerprint ───────────────────────────────────────────────────────
+function gatherCanvas() {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 240; c.height = 36;
+    const ctx = c.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#f60';
+    ctx.fillRect(125, 1, 62, 20);
+    ctx.fillStyle = '#069';
+    ctx.fillText('WhoAmIWeb 🔍', 2, 15);
+    ctx.fillStyle = 'rgba(102,204,0,0.7)';
+    ctx.fillText('WhoAmIWeb 🔍', 4, 17);
+    const data = c.toDataURL();
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) hash = ((hash << 5) - hash) + data.charCodeAt(i), hash |= 0;
+    set('canvas-fp', '✓ Unterstützt', 'accent');
+    const hex = '0x' + Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+    set('canvas-hash', hex);
+    return hex;
+  } catch(e) { set('canvas-fp', 'Fehler'); return ''; }
+}
+
+// ─── Audio fingerprint ────────────────────────────────────────────────────────
+async function gatherAudio() {
+  try {
+    const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 44100, 44100);
+    const osc = ctx.createOscillator();
+    const comp = ctx.createDynamicsCompressor();
+    osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+    const buf = await ctx.startRendering();
+    const data = buf.getChannelData(0);
+    let sum = 0;
+    for (let i = 0; i < 500; i++) sum += Math.abs(data[i]);
+    const hex = '0x' + (sum * 1e6 | 0).toString(16).toUpperCase().padStart(8, '0');
+    set('audio-api', '✓ Unterstützt', 'accent');
+    set('audio-hash', hex);
+    return hex;
+  } catch(e) { set('audio-api', 'Nicht verfügbar'); return ''; }
+}
+
+// ─── Font detection ───────────────────────────────────────────────────────────
+function detectFonts() {
+  const testFonts = [
+    'Arial','Verdana','Georgia','Times New Roman','Courier New','Trebuchet MS',
+    'Comic Sans MS','Impact','Helvetica Neue','Palatino','Garamond','Bookman',
+    'Tahoma','Century Gothic','Lucida Console','Monaco','Consolas','Gill Sans',
+    'Optima','Calibri','Cambria','Candara','Franklin Gothic','Futura','Segoe UI',
+    'Roboto','Ubuntu','Fira Sans','Source Code Pro'
+  ];
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = '72px monospace';
+  const baseW = ctx.measureText('mmmmmmmmmmlli').width;
+  const found = testFonts.filter(f => {
+    ctx.font = `72px '${f}', monospace`;
+    return ctx.measureText('mmmmmmmmmmlli').width !== baseW;
+  });
+  set('fonts', found.length ? found.join(', ') : '— (keine erkannt)');
+  let h = 0;
+  const str = found.join('|');
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i), h |= 0;
+  const hex = '0x' + Math.abs(h).toString(16).toUpperCase().padStart(8, '0');
+  set('font-hash', hex);
+  return str;
+}
+
+// ─── Permissions check ────────────────────────────────────────────────────────
+async function checkPermissions() {
+  const perms = [
+    { name: 'camera',        id: 'camera' },
+    { name: 'microphone',    id: 'mic' },
+    { name: 'notifications', id: 'notifs' },
+    { name: 'geolocation',   id: 'geo-api' }
+  ];
+  const labelMap = { granted: '✓ Erlaubt', denied: '✗ Verweigert', prompt: '⚠ Nicht gefragt' };
+  const clsMap   = { granted: 'warn',      denied: 'danger',       prompt: '' };
+  for (const p of perms) {
+    try {
+      const result = await navigator.permissions.query({ name: p.name });
+      set(p.id, labelMap[result.state] || result.state, clsMap[result.state]);
+    } catch(e) {
+      set(p.id, 'Nicht prüfbar');
+    }
+  }
+}
+
+// ─── Battery ──────────────────────────────────────────────────────────────────
+async function gatherBattery() {
+  try {
+    const b = await navigator.getBattery();
+    const pct = Math.round(b.level * 100);
+    set('battery', pct + '%', pct < 20 ? 'danger' : 'accent');
+    set('battery-charging', b.charging ? '✓ Wird geladen' : '✗ Nicht geladen', b.charging ? 'accent' : '');
+    if (b.charging) {
+      set('battery-time', b.chargingTime === Infinity ? 'Vollständig' : Math.round(b.chargingTime / 60) + ' min bis voll');
+    } else {
+      set('battery-time', b.dischargingTime === Infinity ? 'Unbekannt' : Math.round(b.dischargingTime / 60) + ' min verbleibend');
+    }
+  } catch(e) {
+    ['battery','battery-charging','battery-time'].forEach(id => set(id, 'Nicht verfügbar'));
+  }
+}
+
+// ─── Storage estimation ───────────────────────────────────────────────────────
+async function gatherStorageEst() {
+  try {
+    const est = await navigator.storage.estimate();
+    set('storage-est', est.quota ? (est.quota / 1e9).toFixed(1) + ' GB' : '—');
+    set('storage-free', est.usage != null && est.quota
+      ? ((est.quota - est.usage) / 1e9).toFixed(2) + ' GB frei'
+      : '—');
+  } catch(e) {}
+}
+
+// ─── Ad-blocker detection ─────────────────────────────────────────────────────
+function detectAdBlock() {
+  const bait = document.createElement('div');
+  bait.className = 'ad banner ads advertisement';
+  bait.style.cssText = 'position:absolute;top:-9999px;height:1px;width:1px;';
+  document.body.appendChild(bait);
+  const blocked = bait.offsetParent === null || !bait.clientWidth;
+  bait.remove();
+  set('adblock', blocked ? '✓ Erkannt' : '✗ Nicht erkannt', blocked ? 'warn' : 'accent');
+}
+
+// ─── Incognito detection ──────────────────────────────────────────────────────
+async function detectIncognito() {
+  try {
+    const fs = window.RequestFileSystem || window.webkitRequestFileSystem;
+    if (!fs) { set('incognito', 'Nicht prüfbar'); return; }
+    await new Promise((res, rej) => fs(window.TEMPORARY, 100, res, rej));
+    set('incognito', '✗ Normal-Modus', 'accent');
+  } catch(e) {
+    set('incognito', '⚠ Möglicherweise Inkognito', 'warn');
+  }
+}
+
+// ─── Plugins ──────────────────────────────────────────────────────────────────
+function gatherPlugins() {
+  const plugins = Array.from(navigator.plugins || []);
+  const tbody = $('plugin-rows');
+  if (!plugins.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color:var(--text2)">Keine Plugins erkannt (modern browsers hide these)</td></tr>';
+    set('font-hash', '0x00000000');
+    return;
+  }
+  tbody.innerHTML = plugins.map(p => {
+    const mts = Array.from(p).map(mt => mt.type).join(', ');
+    return `<tr>
+      <td>${p.name}</td>
+      <td style="color:var(--text2);font-size:0.65rem;">${p.description || '—'}</td>
+      <td style="color:var(--text2);font-size:0.65rem;">${mts || '—'}</td>
+    </tr>`;
+  }).join('');
+  let h = 0;
+  const str = plugins.map(p => p.name).join('|');
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i), h |= 0;
+  set('font-hash', '0x' + Math.abs(h).toString(16).toUpperCase().padStart(8, '0'));
+}
+
+// ─── Overall fingerprint hash ─────────────────────────────────────────────────
+function computeFingerprint(components) {
+  const str = Object.values(components).join('|');
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i), h |= 0;
+  return Math.abs(h).toString(16).toUpperCase().padStart(8, '0');
+}
+
+// ─── Continent code → name ────────────────────────────────────────────────────
+const continentNames = {
+  AF: 'Afrika', AN: 'Antarktis', AS: 'Asien', EU: 'Europa',
+  NA: 'Nordamerika', OC: 'Ozeanien', SA: 'Südamerika'
+};
+
+// ─── Reverse DNS lookup via dns.google ───────────────────────────────────────
+async function reverseDNS(ip) {
+  try {
+    // Only works for IPv4 without issues
+    if (!ip || ip.includes(':')) return null;
+    const parts = ip.split('.').reverse().join('.');
+    const url = `https://dns.google/resolve?name=${parts}.in-addr.arpa&type=PTR`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const ptr = data?.Answer?.[0]?.data;
+    return ptr ? ptr.replace(/\.$/, '') : null;
+  } catch(e) { return null; }
+}
+
+// ─── IPv6 detection ───────────────────────────────────────────────────────────
+async function detectIPv6() {
+  try {
+    const res = await fetch('https://ipapi.co/json/', {
+      headers: { 'Accept': 'application/json' }
+    });
+    // This is already covered in fetchIP, just return
+    return null;
+  } catch(e) { return null; }
+}
+
+// ─── Map initialisation ───────────────────────────────────────────────────────
+let mapInstance = null;
+let mapMarker   = null;
+let mapCircle   = null;
+
+function initMap(lat, lng, city, countryName, ip, isp) {
+  const mapEl = $('map');
+  const loadEl = $('map-loading');
+
+  loadEl.style.display = 'none';
+  mapEl.style.display  = 'block';
+
+  if (mapInstance) {
+    mapInstance.remove();
+    mapInstance = null;
+  }
+
+  mapInstance = L.map('map', {
+    zoomControl: true,
+    scrollWheelZoom: false,
+    attributionControl: true
+  }).setView([lat, lng], 10);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom: 18
+  }).addTo(mapInstance);
+
+  // Custom pulsing marker icon
+  const icon = L.divIcon({
+    html: `
+      <div style="position:relative;width:20px;height:20px;">
+        <div style="position:absolute;inset:0;border-radius:50%;background:#00ff88;opacity:0.25;animation:mapPulse 2s ease-out infinite;"></div>
+        <div style="position:absolute;inset:4px;border-radius:50%;background:#00ff88;border:2px solid #fff;box-shadow:0 0 8px rgba(0,255,136,0.8);"></div>
+      </div>`,
+    className: '',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -12]
+  });
+
+  // Add CSS animation for marker
+  if (!document.getElementById('leaflet-pulse-style')) {
+    const style = document.createElement('style');
+    style.id = 'leaflet-pulse-style';
+    style.textContent = `
+      @keyframes mapPulse {
+        0%   { transform: scale(1);  opacity: 0.4; }
+        70%  { transform: scale(3);  opacity: 0;   }
+        100% { transform: scale(3);  opacity: 0;   }
+      }`;
+    document.head.appendChild(style);
+  }
+
+  mapMarker = L.marker([lat, lng], { icon })
+    .addTo(mapInstance)
+    .bindPopup(`
+      <div style="font-family:monospace;font-size:0.75rem;line-height:1.6;">
+        <strong style="color:#00aa55;">${city || '?'}, ${countryName || '?'}</strong><br>
+        <span style="color:#666;">IP:</span> ${ip}<br>
+        <span style="color:#666;">ISP:</span> ${isp || '—'}<br>
+        <span style="color:#999;font-size:0.65rem;">Genauigkeit: ~20–50 km</span>
+      </div>`, { maxWidth: 220 })
+    .openPopup();
+
+  // Accuracy circle
+  mapCircle = L.circle([lat, lng], {
+    radius: 30000,
+    color: '#00ff88',
+    fillColor: '#00ff88',
+    fillOpacity: 0.06,
+    weight: 1,
+    dashArray: '4 4'
+  }).addTo(mapInstance);
+
+  // Force re-render after container visible
+  setTimeout(() => mapInstance.invalidateSize(), 200);
+}
+
+// ─── IP & Geo (main fetch) ────────────────────────────────────────────────────
+async function fetchIP() {
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+
+    if (d.error) throw new Error(d.reason || 'API error');
+
+    const ip = d.ip || '—';
+
+    // Hero IP display
+    $('ip-box').textContent = ip;
+
+    // ── IP Information ───────────────────────────────────────────────────────
+    set('ip4', d.version === 'IPv4' ? ip : (d.ip || '—'), 'accent');
+
+    // IPv6: ipapi.co returns IPv4 by default. If the resolved IP looks like IPv6 show it,
+    // otherwise mark as not detected (ipapi.co free tier doesn't expose IPv6).
+    if (d.version === 'IPv6') {
+      set('ip6', ip, 'info');
+    } else {
+      set('ip6', 'Nicht erkannt (IPv4-Verbindung)');
+    }
+
+    // ISP / ASN — ipapi.co: org = "ASxxxxx ISP Name"
+    const orgRaw = d.org || '';
+    const asnMatch = orgRaw.match(/^(AS\d+)\s+(.*)/);
+    if (asnMatch) {
+      set('asn', asnMatch[1], 'info');
+      set('isp', asnMatch[2]);
+      set('org', asnMatch[2]);
+    } else {
+      set('asn', d.asn || '—');
+      set('isp', orgRaw || '—');
+      set('org', orgRaw || '—');
+    }
+
+    set('hosting', d.hosting ? '✓ Datacenter / Hosting' : '✗ Privat / Residential', d.hosting ? 'warn' : 'accent');
+    set('proxy',   d.proxy   ? '✓ Proxy erkannt'        : '✗ Kein Proxy',           d.proxy   ? 'danger' : 'accent');
+    set('tor',     d.tor     ? '✓ Tor-Knoten erkannt'   : '✗ Kein Tor',             d.tor     ? 'danger' : 'accent');
+
+    // ── Geographic location ──────────────────────────────────────────────────
+    set('city',      d.city        || '—');
+    set('region',    d.region      || '—');
+
+    const flag = d.country_code
+      ? String.fromCodePoint(...[...d.country_code].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))
+      : '';
+    set('country',   (d.country_name || '—') + ' ' + flag + (d.country_code ? ' (' + d.country_code + ')' : ''));
+    set('continent', d.continent_code
+      ? (continentNames[d.continent_code] || d.continent_code) + ' (' + d.continent_code + ')'
+      : '—');
+    set('postal',    d.postal    || '—');
+    set('timezone',  d.timezone  || '—');
+
+    const lat = parseFloat(d.latitude);
+    const lng = parseFloat(d.longitude);
+
+    if (!isNaN(lat) && !isNaN(lng)) {
+      set('coords', lat.toFixed(4) + ', ' + lng.toFixed(4), 'accent');
+      $('lat-display').textContent = lat.toFixed(4);
+      $('lng-display').textContent = lng.toFixed(4);
+      $('map-city').textContent    = d.city || '—';
+      $('map-country').textContent = d.country_name || '—';
+    } else {
+      set('coords', 'Keine Koordinaten verfügbar', 'warn');
+    }
+
+    // Local time in IP timezone
+    if (d.timezone) {
+      try {
+        const localTime = new Intl.DateTimeFormat('de-DE', {
+          timeZone: d.timezone,
+          dateStyle: 'medium',
+          timeStyle: 'medium'
+        }).format(new Date());
+        set('localtime', localTime);
+      } catch(e) {
+        set('localtime', d.datetime ? new Date(d.datetime).toLocaleString('de-DE') : '—');
+      }
+    } else {
+      set('localtime', '—');
+    }
+
+    // ── Reverse DNS ──────────────────────────────────────────────────────────
+    set('rdns', '⟳ Wird abgefragt…');
+    const ptr = await reverseDNS(ip);
+    set('rdns', ptr || '— (kein PTR-Eintrag)', ptr ? 'info' : '');
+
+    // ── Initialise map ───────────────────────────────────────────────────────
+    if (!isNaN(lat) && !isNaN(lng)) {
+      initMap(lat, lng, d.city, d.country_name, ip, orgRaw);
+    } else {
+      $('map-loading').innerHTML = '<span style="color:var(--red)">Koordinaten nicht verfügbar</span>';
+    }
+
+  } catch(e) {
+    console.error('fetchIP error:', e);
+    $('ip-box').textContent = 'Fehler beim Laden';
+    $('ip-box').style.color = 'var(--red)';
+    ['ip4','ip6','isp','asn','org','hosting','proxy','tor','rdns',
+     'city','region','country','continent','postal','coords','timezone','localtime']
+      .forEach(id => set(id, 'Fehler: ' + (e.message || 'unbekannt'), 'danger'));
+    $('map-loading').innerHTML = '<span style="color:var(--red)">⚠ Karte konnte nicht geladen werden — API nicht erreichbar</span>';
+  }
+}
+
+// ─── Main init ────────────────────────────────────────────────────────────────
+async function init() {
+  parseUA();
+  gatherSystem();
+  gatherScreen();
+  gatherTime();
+  gatherStorage();
+  gatherNetwork();
+  gatherWebGL();
+  detectAdBlock();
+  gatherPlugins();
+  detectWebRTC();
+
+  const [, audioHash] = await Promise.all([
+    fetchIP(),
+    gatherAudio()
+  ]);
+
+  const canvasHash = gatherCanvas();
+  const fontStr    = detectFonts();
+
+  detectIncognito();
+  checkPermissions();
+  gatherBattery();
+  gatherStorageEst();
+
+  const fp = computeFingerprint({
+    ua:      navigator.userAgent,
+    screen:  screen.width + 'x' + screen.height + 'x' + (window.devicePixelRatio || 1),
+    tz:      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    lang:    navigator.language,
+    canvas:  canvasHash || '',<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhoAmIWeb — Dein digitaler Fingerabdruck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f; --bg2: #111118; --bg3: #1a1a24;
+    --accent: #00ff88; --accent2: #ff3366; --accent3: #00aaff;
+    --text: #e8e8f0; --text2: #8888aa;
+    --border: rgba(0,255,136,0.15);
+    --red: #ff3366; --yellow: #ffcc00;
+    --mono: 'Space Mono', monospace; --display: 'Syne', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--mono); min-height:100vh; overflow-x:hidden; }
+  .scanline {
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);
+    pointer-events:none; z-index:1000;
+  }
+  header {
+    border-bottom:1px solid var(--border); padding:2rem 3rem;
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(10,10,15,0.95); position:sticky; top:0; z-index:100; backdrop-filter:blur(12px);
+  }
+  .logo { font-family:var(--display); font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; }
+  .logo span { color:var(--accent); }
+  .status-bar { display:flex; gap:1.5rem; align-items:center; font-size:0.72rem; color:var(--text2); }
+  .pulse { width:8px; height:8px; background:var(--accent); border-radius:50%; animation:pulse 1.5s infinite; display:inline-block; margin-right:6px; }
+  @keyframes pulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,136,0.4)} 50%{opacity:0.8;box-shadow:0 0 0 6px rgba(0,255,136,0)} }
+  .main { max-width:1400px; margin:0 auto; padding:2rem 3rem 4rem; }
+  .hero { text-align:center; padding:3rem 0 2rem; border-bottom:1px solid var(--border); margin-bottom:2rem; }
+  .hero h1 { font-family:var(--display); font-size:clamp(2rem,5vw,4rem); font-weight:800; line-height:1.1; margin-bottom:1rem; }
+  .hero h1 .h1 { color:var(--accent); }
+  .hero h1 .h2 { color:var(--accent2); }
+  .hero-sub { color:var(--text2); font-size:0.8rem; letter-spacing:0.1em; text-transform:uppercase; }
+  .ip-display {
+    margin:2rem auto; display:inline-block; background:var(--bg3);
+    border:1px solid var(--accent); border-radius:4px; padding:1rem 2.5rem;
+    font-size:2rem; font-weight:700; color:var(--accent); letter-spacing:0.05em; position:relative;
+  }
+  .ip-display::before { content:'DEINE IP-ADRESSE'; position:absolute; top:4px; left:12px; font-size:0.6rem; color:var(--text2); letter-spacing:0.15em; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:1.5rem; margin-bottom:1.5rem; }
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:2px; overflow:hidden; transition:border-color 0.3s; }
+  .card:hover { border-color:rgba(0,255,136,0.35); }
+  .card-header { padding:0.85rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:0.75rem; background:rgba(0,255,136,0.04); }
+  .card-icon { width:28px; height:28px; background:rgba(0,255,136,0.1); border:1px solid rgba(0,255,136,0.3); border-radius:2px; display:flex; align-items:center; justify-content:center; font-size:0.9rem; }
+  .card-title { font-family:var(--display); font-weight:700; font-size:0.85rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); }
+  .card-body { padding:1.25rem; }
+  .info-row { display:flex; justify-content:space-between; align-items:flex-start; padding:0.55rem 0; border-bottom:1px solid rgba(255,255,255,0.04); gap:1rem; }
+  .info-row:last-child { border-bottom:none; }
+  .info-key { color:var(--text2); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; min-width:140px; flex-shrink:0; }
+  .info-val { font-size:0.78rem; color:var(--text); text-align:right; word-break:break-all; }
+  .info-val.accent { color:var(--accent); }
+  .info-val.danger { color:var(--red); }
+  .info-val.warn   { color:var(--yellow); }
+  .info-val.info   { color:var(--accent3); }
+  #map { width:100%; height:380px; filter:grayscale(60%) brightness(0.7) hue-rotate(180deg); display:none; }
+  .map-loading { height:380px; display:flex; align-items:center; justify-content:center; background:var(--bg3); color:var(--text2); font-size:0.75rem; letter-spacing:0.1em; flex-direction:column; gap:0.75rem; }
+  .map-coords { padding:0.75rem 1.25rem; background:var(--bg3); border-top:1px solid var(--border); display:flex; gap:2rem; font-size:0.72rem; flex-wrap:wrap; }
+  .map-coords .mc-label { color:var(--text2); margin-right:0.4rem; }
+  .section-label { font-size:0.65rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.15em; margin-bottom:1.5rem; padding-bottom:0.5rem; border-bottom:1px solid var(--border); }
+  .warning-box { background:rgba(255,51,102,0.06); border:1px solid rgba(255,51,102,0.25); border-radius:2px; padding:1rem 1.25rem; margin-top:2rem; font-size:0.72rem; color:var(--text2); line-height:1.7; }
+  .warning-box strong { color:var(--red); display:block; margin-bottom:0.5rem; font-size:0.8rem; }
+  .scan-anim { position:relative; overflow:hidden; }
+  .scan-anim::after { content:''; position:absolute; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--accent),transparent); animation:scan 3s linear infinite; top:0; }
+  @keyframes scan { 0%{top:0;opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{top:100%;opacity:0} }
+  .loading-text { color:var(--text2); font-size:0.75rem; animation:blink 1s step-end infinite; }
+  @keyframes blink { 50%{opacity:0} }
+  table.data-table { width:100%; border-collapse:collapse; font-size:0.72rem; }
+  table.data-table td, table.data-table th { padding:0.5rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.04); text-align:left; }
+  table.data-table th { color:var(--text2); font-weight:400; text-transform:uppercase; letter-spacing:0.08em; background:rgba(0,255,136,0.03); }
+  table.data-table tr:last-child td { border-bottom:none; }
+  @media(max-width:700px){ header,.main{padding-left:1rem;padding-right:1rem} .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+<header>
+  <div class="logo">Who<span>Am</span>IWeb</div>
+  <div class="status-bar">
+    <span><span class="pulse"></span>LIVE SCAN AKTIV</span>
+    <span id="live-time">--:--:--</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="hero">
+    <h1>Alles, was das <span class="h1">Internet</span> über<br>dich <span class="h2">weiß</span>.</h1>
+    <div class="hero-sub">Gesammelte Daten · Digitaler Fingerabdruck · Live-Standort</div>
+    <div class="ip-display" id="ip-box"><span class="loading-text">Wird geladen…</span></div>
+  </div>
+
+  <div class="section-label">01 / Netzwerk & Standort</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🌐</div><div class="card-title">IP-Informationen</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">IPv4</span><span class="info-val accent" id="ip4"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">IPv6</span><span class="info-val" id="ip6"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ISP / Provider</span><span class="info-val" id="isp"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ASN</span><span class="info-val info" id="asn">—</span></div>
+        <div class="info-row"><span class="info-key">Organisation</span><span class="info-val" id="org">—</span></div>
+        <div class="info-row"><span class="info-key">Hosting / Datacenter</span><span class="info-val" id="hosting">—</span></div>
+        <div class="info-row"><span class="info-key">Proxy / VPN</span><span class="info-val" id="proxy">—</span></div>
+        <div class="info-row"><span class="info-key">Tor-Knoten</span><span class="info-val" id="tor">—</span></div>
+        <div class="info-row"><span class="info-key">Reverse-DNS</span><span class="info-val" id="rdns"><span class="loading-text">…</span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">📍</div><div class="card-title">Geografischer Standort</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Stadt</span><span class="info-val" id="city"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">Region / Bundesland</span><span class="info-val" id="region">—</span></div>
+        <div class="info-row"><span class="info-key">Land</span><span class="info-val" id="country">—</span></div>
+        <div class="info-row"><span class="info-key">Kontinent</span><span class="info-val" id="continent">—</span></div>
+        <div class="info-row"><span class="info-key">Postleitzahl</span><span class="info-val" id="postal">—</span></div>
+        <div class="info-row"><span class="info-key">Koordinaten</span><span class="info-val accent" id="coords">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="timezone">—</span></div>
+        <div class="info-row"><span class="info-key">Ortszeit (IP-Zone)</span><span class="info-val" id="localtime">—</span></div>
+        <div class="info-row"><span class="info-key">Genauigkeit</span><span class="info-val warn">~20–50 km Radius</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="card scan-anim" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🗺</div><div class="card-title">Live-Standortkarte (IP-basiert)</div></div>
+    <div id="map-loading" class="map-loading">
+      <span class="loading-text">IP-Standort wird abgerufen…</span>
+    </div>
+    <div id="map"></div>
+    <div class="map-coords">
+      <div><span class="mc-label">LAT</span><span id="lat-display">—</span></div>
+      <div><span class="mc-label">LNG</span><span id="lng-display">—</span></div>
+      <div><span class="mc-label">STADT</span><span id="map-city">—</span></div>
+      <div><span class="mc-label">LAND</span><span id="map-country">—</span></div>
+      <div><span class="mc-label">QUELLE</span><span>IP-Geolokalisierung</span></div>
+      <div><span class="mc-label">GENAUIGKEIT</span><span style="color:var(--yellow)">~20–50 km</span></div>
+    </div>
+  </div>
+
+  <div class="section-label">02 / Browser & Betriebssystem</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🖥</div><div class="card-title">Browser</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser</span><span class="info-val" id="browser-name">—</span></div>
+        <div class="info-row"><span class="info-key">Version</span><span class="info-val" id="browser-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Engine</span><span class="info-val" id="browser-engine">—</span></div>
+        <div class="info-row"><span class="info-key">Sprache</span><span class="info-val" id="browser-lang">—</span></div>
+        <div class="info-row"><span class="info-key">Alle Sprachen</span><span class="info-val" id="browser-langs">—</span></div>
+        <div class="info-row"><span class="info-key">DNT-Header</span><span class="info-val" id="dnt">—</span></div>
+        <div class="info-row"><span class="info-key">Cookies aktiv</span><span class="info-val" id="cookies">—</span></div>
+        <div class="info-row"><span class="info-key">JavaScript</span><span class="info-val accent">Aktiv ✓</span></div>
+        <div class="info-row"><span class="info-key">User-Agent</span><span class="info-val" id="ua" style="font-size:0.62rem;">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">💻</div><div class="card-title">Gerät & Betriebssystem</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Betriebssystem</span><span class="info-val" id="os">—</span></div>
+        <div class="info-row"><span class="info-key">OS-Version</span><span class="info-val" id="os-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Gerät</span><span class="info-val" id="device">—</span></div>
+        <div class="info-row"><span class="info-key">Gerätekategorie</span><span class="info-val" id="device-cat">—</span></div>
+        <div class="info-row"><span class="info-key">CPU-Kerne</span><span class="info-val" id="cpu-cores">—</span></div>
+        <div class="info-row"><span class="info-key">RAM (approx.)</span><span class="info-val" id="ram">—</span></div>
+        <div class="info-row"><span class="info-key">Plattform</span><span class="info-val" id="platform">—</span></div>
+        <div class="info-row"><span class="info-key">Touch-Gerät</span><span class="info-val" id="touch">—</span></div>
+        <div class="info-row"><span class="info-key">Max. Touch-Punkte</span><span class="info-val" id="touch-points">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">03 / Bildschirm & Verbindung</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🖥</div><div class="card-title">Bildschirm</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Auflösung</span><span class="info-val accent" id="resolution">—</span></div>
+        <div class="info-row"><span class="info-key">Verfügbar</span><span class="info-val" id="avail-resolution">—</span></div>
+        <div class="info-row"><span class="info-key">Viewport</span><span class="info-val" id="viewport">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeldichte (DPR)</span><span class="info-val" id="dpr">—</span></div>
+        <div class="info-row"><span class="info-key">Farbtiefe</span><span class="info-val" id="color-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeltiefe</span><span class="info-val" id="pixel-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Orientierung</span><span class="info-val" id="orientation">—</span></div>
+        <div class="info-row"><span class="info-key">Dunkelmodus</span><span class="info-val" id="dark-mode">—</span></div>
+        <div class="info-row"><span class="info-key">HDR-Unterstützung</span><span class="info-val" id="hdr">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">📡</div><div class="card-title">Verbindung & Netzwerk</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Verbindungstyp</span><span class="info-val" id="conn-type">—</span></div>
+        <div class="info-row"><span class="info-key">Effektiver Typ</span><span class="info-val" id="conn-eff">—</span></div>
+        <div class="info-row"><span class="info-key">Bandbreite</span><span class="info-val" id="bandwidth">—</span></div>
+        <div class="info-row"><span class="info-key">RTT (Latenz)</span><span class="info-val" id="rtt">—</span></div>
+        <div class="info-row"><span class="info-key">Data Saver</span><span class="info-val" id="data-saver">—</span></div>
+        <div class="info-row"><span class="info-key">Online-Status</span><span class="info-val" id="online">—</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (lokal)</span><span class="info-val" id="webrtc-local">Wird geprüft…</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (public)</span><span class="info-val" id="webrtc-public">Wird geprüft…</span></div>
+        <div class="info-row"><span class="info-key">HTTPS</span><span class="info-val" id="https">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">04 / Sicherheit & Datenschutz</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🔒</div><div class="card-title">Sicherheits-Check</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Ad-Blocker</span><span class="info-val" id="adblock">—</span></div>
+        <div class="info-row"><span class="info-key">Do Not Track</span><span class="info-val" id="dnt2">—</span></div>
+        <div class="info-row"><span class="info-key">Inkognito-Modus</span><span class="info-val" id="incognito">—</span></div>
+        <div class="info-row"><span class="info-key">LocalStorage</span><span class="info-val" id="localstorage">—</span></div>
+        <div class="info-row"><span class="info-key">SessionStorage</span><span class="info-val" id="sessionstorage">—</span></div>
+        <div class="info-row"><span class="info-key">IndexedDB</span><span class="info-val" id="indexeddb">—</span></div>
+        <div class="info-row"><span class="info-key">Service Worker</span><span class="info-val" id="sw">—</span></div>
+        <div class="info-row"><span class="info-key">WebAssembly</span><span class="info-val" id="wasm">—</span></div>
+        <div class="info-row"><span class="info-key">Flash</span><span class="info-val">Nicht verfügbar</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🍪</div><div class="card-title">Plugins & APIs</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">WebGL</span><span class="info-val" id="webgl">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Renderer</span><span class="info-val" id="webgl-renderer" style="font-size:0.65rem;">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Vendor</span><span class="info-val" id="webgl-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Canvas FP</span><span class="info-val" id="canvas-fp">—</span></div>
+        <div class="info-row"><span class="info-key">Audio API</span><span class="info-val" id="audio-api">—</span></div>
+        <div class="info-row"><span class="info-key">Kamera-Zugriff</span><span class="info-val" id="camera">—</span></div>
+        <div class="info-row"><span class="info-key">Mikrofon-Zugriff</span><span class="info-val" id="mic">—</span></div>
+        <div class="info-row"><span class="info-key">Benachrichtigungen</span><span class="info-val" id="notifs">—</span></div>
+        <div class="info-row"><span class="info-key">Geolokation API</span><span class="info-val" id="geo-api">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">05 / Zeit, Akku & Sonstiges</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">⏰</div><div class="card-title">Zeit & Datum</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser-Zeit</span><span class="info-val accent" id="browser-time">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="tz">—</span></div>
+        <div class="info-row"><span class="info-key">UTC-Versatz</span><span class="info-val" id="utc-offset">—</span></div>
+        <div class="info-row"><span class="info-key">Sommerzeit aktiv</span><span class="info-val" id="dst">—</span></div>
+        <div class="info-row"><span class="info-key">Datumsformat</span><span class="info-val" id="date-format">—</span></div>
+        <div class="info-row"><span class="info-key">Wochentag</span><span class="info-val" id="weekday">—</span></div>
+        <div class="info-row"><span class="info-key">Uptime (Seite)</span><span class="info-val" id="uptime">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🔋</div><div class="card-title">Akku & Hardware</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Akkustand</span><span class="info-val" id="battery">—</span></div>
+        <div class="info-row"><span class="info-key">Ladestatus</span><span class="info-val" id="battery-charging">—</span></div>
+        <div class="info-row"><span class="info-key">Ladezeit</span><span class="info-val" id="battery-time">—</span></div>
+        <div class="info-row"><span class="info-key">GPU (WebGL)</span><span class="info-val" id="gpu">—</span></div>
+        <div class="info-row"><span class="info-key">Speicherkapazität</span><span class="info-val" id="storage-est">—</span></div>
+        <div class="info-row"><span class="info-key">Freier Speicher</span><span class="info-val" id="storage-free">—</span></div>
+        <div class="info-row"><span class="info-key">Navigator Vendor</span><span class="info-val" id="nav-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Produkt</span><span class="info-val" id="nav-product">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">06 / Digitaler Fingerabdruck</div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🔍</div><div class="card-title">Browser-Fingerabdruck</div></div>
+    <div class="card-body">
+      <div class="info-row"><span class="info-key">Fingerabdruck-Hash</span><span class="info-val accent" id="fp-hash">Wird berechnet…</span></div>
+      <div class="info-row"><span class="info-key">Canvas-Hash</span><span class="info-val" id="canvas-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Audio-Hash</span><span class="info-val" id="audio-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Font-Hash</span><span class="info-val" id="font-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Erkannte Schriften</span><span class="info-val" id="fonts">—</span></div>
+      <div class="info-row"><span class="info-key">Einzigartigkeit</span><span class="info-val warn">Sehr hoch — du bist erkennbar</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🔌</div><div class="card-title">Browser-Plugins</div></div>
+    <div class="card-body">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Beschreibung</th><th>Dateitypen</th></tr></thead>
+        <tbody id="plugin-rows"><tr><td colspan="3" style="color:var(--text2)">Wird geladen…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠ Datenschutz-Hinweis</strong>
+    Diese Seite speichert keine Daten dauerhaft. Die IP-Geolokalisierung läuft über die Anthropic API mit Web-Search — deine IP wird kurzzeitig verarbeitet, aber nicht gespeichert. Alle anderen Daten werden ausschließlich lokal in deinem Browser ausgelesen.
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const set = (id, val, cls) => {
+  const el = $(id); if (!el) return;
+  el.textContent = val || '—';
+  if (cls !== undefined) el.className = 'info-val ' + (cls || '');
+};
+
+// Clock & uptime
+const startTime = Date.now();
+function tick() {
+  const now = new Date();
+  $('live-time').textContent    = now.toLocaleTimeString('de-DE');
+  $('browser-time').textContent = now.toLocaleString('de-DE');
+  $('uptime').textContent = Math.floor((Date.now() - startTime) / 1000) + 's';
+}
+setInterval(tick, 1000); tick();
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h) + str.charCodeAt(i), h |= 0;
+  return '0x' + Math.abs(h).toString(16).toUpperCase().padStart(8, '0');
+}
+
+const CONTINENTS = { AF:'Afrika', AN:'Antarktis', AS:'Asien', EU:'Europa', NA:'Nordamerika', OC:'Ozeanien', SA:'Südamerika' };
+
+function countryFlag(code) {
+  if (!code || code.length !== 2) return '';
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)));
+}
+
+// ── Fetch IP/Geo data via Anthropic API + web_search ─────────────────────────
+async function fetchIPData() {
+  const prompt = `You must use the web_search tool to find the current public IP address of the person sending this request. Search for "what is my ip address" or "my current ip" to find it.
+
+After getting the IP, also search for its geolocation data including city, country, ISP, and coordinates.
+
+Respond with ONLY a raw JSON object — no markdown fences, no explanation, just the JSON. Use these exact field names:
+{
+  "ip": "x.x.x.x",
+  "ipv6": null,
+  "isp": "provider name",
+  "asn": "AS12345",
+  "org": "organisation",
+  "hosting": false,
+  "proxy": false,
+  "tor": false,
+  "city": "city",
+  "region": "region/state",
+  "country_name": "Germany",
+  "country_code": "DE",
+  "continent_code": "EU",
+  "postal": "60313",
+  "latitude": 50.1109,
+  "longitude": 8.6821,
+  "timezone": "Europe/Berlin",
+  "rdns": "hostname or null"
+}`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('API ' + res.status + ': ' + txt.slice(0, 200));
+  }
+
+  const data = await res.json();
+
+  // Find the text block (comes after tool_use blocks)
+  const textBlock = (data.content || []).find(b => b.type === 'text');
+  if (!textBlock || !textBlock.text) throw new Error('Keine Textantwort erhalten');
+
+  let raw = textBlock.text.trim();
+  // Strip markdown code fences
+  raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  // Extract first {...} block
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('Kein JSON gefunden in: ' + raw.slice(0, 100));
+  return JSON.parse(m[0]);
+}
+
+// ── Render IP data into DOM ───────────────────────────────────────────────────
+function renderIPData(d) {
+  const ip = d.ip || '—';
+  $('ip-box').textContent = ip;
+
+  set('ip4', ip, 'accent');
+  set('ip6', d.ipv6 || 'Nicht erkannt (IPv4-Verbindung)');
+  set('isp', d.isp || '—');
+  set('asn', d.asn || '—', 'info');
+  set('org', d.org || d.isp || '—');
+  set('hosting', d.hosting ? '✓ Datacenter / Hosting' : '✗ Privat / Residential', d.hosting ? 'warn' : 'accent');
+  set('proxy',   d.proxy   ? '✓ Proxy erkannt'        : '✗ Kein Proxy',           d.proxy   ? 'danger' : 'accent');
+  set('tor',     d.tor     ? '✓ Tor-Knoten erkannt'   : '✗ Kein Tor',             d.tor     ? 'danger' : 'accent');
+  set('rdns',    d.rdns    || '— (kein PTR-Eintrag)',  d.rdns ? 'info' : '');
+
+  set('city',   d.city   || '—');
+  set('region', d.region || '—');
+
+  const flag = countryFlag(d.country_code);
+  set('country', [d.country_name, flag, d.country_code ? '(' + d.country_code + ')' : ''].filter(Boolean).join(' '));
+
+  const cont = d.continent_code;
+  set('continent', cont ? (CONTINENTS[cont] || cont) + ' (' + cont + ')' : '—');
+  set('postal',    d.postal || '—');
+
+  const lat = parseFloat(d.latitude);
+  const lng = parseFloat(d.longitude);
+  if (!isNaN(lat) && !isNaN(lng)) {
+    set('coords', lat.toFixed(4) + ', ' + lng.toFixed(4), 'accent');
+    $('lat-display').textContent = lat.toFixed(4);
+    $('lng-display').textContent = lng.toFixed(4);
+  } else {
+    set('coords', 'Nicht verfügbar', 'warn');
+  }
+
+  set('timezone', d.timezone || '—');
+  if (d.timezone) {
+    try {
+      set('localtime', new Intl.DateTimeFormat('de-DE', {
+        timeZone: d.timezone, dateStyle: 'medium', timeStyle: 'medium'
+      }).format(new Date()));
+    } catch(e) { set('localtime', '—'); }
+  }
+
+  $('map-city').textContent    = d.city    || '—';
+  $('map-country').textContent = d.country_name || '—';
+
+  return { lat, lng, city: d.city, country: d.country_name, ip, isp: d.isp };
+}
+
+// ── Init Leaflet map ──────────────────────────────────────────────────────────
+function initMap(lat, lng, city, country, ip, isp) {
+  const loadingEl = $('map-loading');
+  const mapEl     = $('map');
+
+  if (isNaN(lat) || isNaN(lng)) {
+    loadingEl.innerHTML = '<span style="color:var(--red)">⚠ Koordinaten nicht verfügbar</span>';
+    return;
+  }
+
+  loadingEl.style.display = 'none';
+  mapEl.style.display = 'block';
+
+  // Inject pulse keyframe once
+  if (!document.getElementById('mpulse-style')) {
+    const s = document.createElement('style');
+    s.id = 'mpulse-style';
+    s.textContent = '@keyframes mpulse{0%{transform:scale(1);opacity:.45}70%{transform:scale(3.8);opacity:0}100%{transform:scale(3.8);opacity:0}}';
+    document.head.appendChild(s);
+  }
+
+  const map = L.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([lat, lng], 10);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom: 18
+  }).addTo(map);
+
+  const icon = L.divIcon({
+    html: `<div style="position:relative;width:22px;height:22px">
+      <div style="position:absolute;inset:0;border-radius:50%;background:#00ff88;animation:mpulse 2s ease-out infinite"></div>
+      <div style="position:absolute;inset:5px;border-radius:50%;background:#00ff88;border:2px solid #fff;box-shadow:0 0 10px rgba(0,255,136,.9)"></div>
+    </div>`,
+    className: '', iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -14]
+  });
+
+  L.marker([lat, lng], { icon }).addTo(map)
+    .bindPopup(`<div style="font-family:monospace;font-size:0.73rem;line-height:1.7">
+      <strong style="color:#00cc66">${city || '?'}, ${country || '?'}</strong><br>
+      <span style="color:#888">IP:</span> ${ip}<br>
+      <span style="color:#888">ISP:</span> ${isp || '—'}<br>
+      <span style="color:#999;font-size:0.63rem">Genauigkeit: ~20–50 km</span>
+    </div>`, { maxWidth: 240 }).openPopup();
+
+  L.circle([lat, lng], {
+    radius: 30000, color: '#00ff88', fillColor: '#00ff88',
+    fillOpacity: 0.07, weight: 1, dashArray: '5 6'
+  }).addTo(map);
+
+  setTimeout(() => map.invalidateSize(), 300);
+}
+
+// ── Browser/UA ────────────────────────────────────────────────────────────────
+function parseUA() {
+  const ua = navigator.userAgent;
+  $('ua').textContent = ua;
+  let b='Unbekannt', v='', e='';
+  if (/Edg\//.test(ua))        { b='Microsoft Edge';  v=ua.match(/Edg\/([\d.]+)/)?.[1]||'';      e='Blink'; }
+  else if(/OPR\//.test(ua))    { b='Opera';           v=ua.match(/OPR\/([\d.]+)/)?.[1]||'';      e='Blink'; }
+  else if(/Chrome\//.test(ua)&&!/Chromium/.test(ua)){ b='Google Chrome'; v=ua.match(/Chrome\/([\d.]+)/)?.[1]||''; e='Blink'; }
+  else if(/Firefox\//.test(ua)){ b='Mozilla Firefox'; v=ua.match(/Firefox\/([\d.]+)/)?.[1]||'';  e='Gecko'; }
+  else if(/Safari\//.test(ua)&&!/Chrome/.test(ua)){  b='Apple Safari';  v=ua.match(/Version\/([\d.]+)/)?.[1]||''; e='WebKit'; }
+  else if(/Chromium\//.test(ua)){b='Chromium';        v=ua.match(/Chromium\/([\d.]+)/)?.[1]||''; e='Blink'; }
+  set('browser-name', b); set('browser-ver', v||'—'); set('browser-engine', e||'—');
+  let os='Unbekannt', ov='';
+  if(/Windows NT 10/.test(ua))        { os='Windows'; ov='10 / 11'; }
+  else if(/Windows NT 6\.3/.test(ua)) { os='Windows'; ov='8.1'; }
+  else if(/Mac OS X ([\d_]+)/.test(ua)){ os='macOS';  ov=ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g,'.')||''; }
+  else if(/Android ([\d.]+)/.test(ua)) { os='Android';ov=ua.match(/Android ([\d.]+)/)?.[1]||''; }
+  else if(/iPhone OS ([\d_]+)/.test(ua)){os='iOS';     ov=ua.match(/iPhone OS ([\d_]+)/)?.[1]?.replace(/_/g,'.')||''; }
+  else if(/Linux/.test(ua))            { os='Linux'; }
+  set('os', os); set('os-ver', ov||'Unbekannt');
+  const mob=/Mobi|Android/i.test(ua);
+  set('device', mob?'Smartphone':'Desktop / Laptop');
+  set('device-cat', mob?'Smartphone / Tablet':'PC / Mac', mob?'':'accent');
+}
+
+function gatherSystem() {
+  set('browser-lang', navigator.language||'—');
+  set('browser-langs', (navigator.languages||[navigator.language]).join(', '));
+  set('dnt', navigator.doNotTrack==='1'?'✓ Aktiv':navigator.doNotTrack==='0'?'✗ Deaktiviert':'Nicht gesetzt');
+  set('dnt2', navigator.doNotTrack==='1'?'✓ Aktiv':'✗ Inaktiv');
+  set('cookies', navigator.cookieEnabled?'✓ Aktiviert':'✗ Deaktiviert', navigator.cookieEnabled?'accent':'danger');
+  set('platform', navigator.platform||'—');
+  set('cpu-cores', navigator.hardwareConcurrency||'—');
+  set('ram', navigator.deviceMemory?navigator.deviceMemory+' GB':'Nicht verfügbar');
+  set('touch', navigator.maxTouchPoints>0?'✓ Ja':'✗ Nein');
+  set('touch-points', navigator.maxTouchPoints);
+  set('nav-vendor', navigator.vendor||'—');
+  set('nav-product', navigator.product||'—');
+}
+
+function gatherScreen() {
+  set('resolution', screen.width+' × '+screen.height);
+  set('avail-resolution', screen.availWidth+' × '+screen.availHeight);
+  set('viewport', window.innerWidth+' × '+window.innerHeight);
+  set('dpr', (window.devicePixelRatio||1)+'x');
+  set('color-depth', screen.colorDepth+' bit');
+  set('pixel-depth', screen.pixelDepth+' bit');
+  set('orientation', screen.orientation?.type||(window.innerWidth>window.innerHeight?'landscape':'portrait'));
+  set('dark-mode', window.matchMedia('(prefers-color-scheme: dark)').matches?'✓ Aktiviert':'✗ Deaktiviert');
+  set('hdr', window.matchMedia('(dynamic-range: high)').matches?'✓ Unterstützt':'—');
+}
+
+function gatherTime() {
+  const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+  set('tz', tz);
+  const off=-new Date().getTimezoneOffset(), sign=off>=0?'+':'-';
+  set('utc-offset','UTC '+sign+Math.floor(Math.abs(off)/60).toString().padStart(2,'0')+':'+(Math.abs(off)%60).toString().padStart(2,'0'));
+  const jan=new Date(new Date().getFullYear(),0,1),jul=new Date(new Date().getFullYear(),6,1);
+  set('dst', new Date().getTimezoneOffset()<Math.max(jan.getTimezoneOffset(),jul.getTimezoneOffset())?'✓ Ja':'✗ Nein');
+  set('date-format', new Date(2025,0,15).toLocaleDateString(navigator.language||'de-DE'));
+  set('weekday', new Date().toLocaleDateString('de-DE',{weekday:'long'}));
+}
+
+function gatherStorage() {
+  set('localstorage', typeof localStorage!=='undefined'?'✓ Verfügbar':'✗ Gesperrt','accent');
+  set('sessionstorage', typeof sessionStorage!=='undefined'?'✓ Verfügbar':'✗ Gesperrt','accent');
+  try{set('indexeddb',window.indexedDB?'✓ Verfügbar':'✗ Gesperrt','accent');}catch(e){set('indexeddb','✗ Gesperrt','danger');}
+  set('sw','serviceWorker' in navigator?'✓ Unterstützt':'—');
+  set('wasm',typeof WebAssembly!=='undefined'?'✓ Unterstützt':'—','accent');
+  set('online',navigator.onLine?'✓ Online':'✗ Offline',navigator.onLine?'accent':'danger');
+  set('https',location.protocol==='https:'?'✓ Gesichert':'⚠ Ungesichert',location.protocol==='https:'?'accent':'warn');
+}
+
+function gatherNetwork() {
+  const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if(conn){
+    set('conn-type',conn.type||'—'); set('conn-eff',conn.effectiveType||'—');
+    set('bandwidth',conn.downlink!=null?conn.downlink+' Mbit/s':'—');
+    set('rtt',conn.rtt!=null?conn.rtt+' ms':'—');
+    set('data-saver',conn.saveData?'✓ Aktiv':'✗ Inaktiv');
+  } else ['conn-type','conn-eff','bandwidth','rtt','data-saver'].forEach(id=>set(id,'Nicht verfügbar'));
+}
+
+function gatherWebGL() {
+  try {
+    const c=document.createElement('canvas');
+    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+    if(!gl){set('webgl','✗ Nicht verfügbar','danger');return;}
+    set('webgl','✓ Unterstützt','accent');
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer=(ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER))||'—';
+    const vendor=(ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR))||'—';
+    set('webgl-renderer',renderer); set('webgl-vendor',vendor); set('gpu',renderer);
+  }catch(e){set('webgl','Fehler','danger');}
+}
+
+function gatherCanvas() {
+  try {
+    const c=document.createElement('canvas'); c.width=240; c.height=36;
+    const ctx=c.getContext('2d');
+    ctx.textBaseline='top'; ctx.font='14px Arial';
+    ctx.fillStyle='#f60'; ctx.fillRect(125,1,62,20);
+    ctx.fillStyle='#069'; ctx.fillText('WhoAmIWeb 🔍',2,15);
+    ctx.fillStyle='rgba(102,204,0,0.7)'; ctx.fillText('WhoAmIWeb 🔍',4,17);
+    const hash=simpleHash(c.toDataURL());
+    set('canvas-fp','✓ Unterstützt','accent'); set('canvas-hash',hash); return hash;
+  }catch(e){set('canvas-fp','Fehler');return '';}
+}
+
+async function gatherAudio() {
+  try {
+    const ctx=new(window.OfflineAudioContext||window.webkitOfflineAudioContext)(1,44100,44100);
+    const osc=ctx.createOscillator(),comp=ctx.createDynamicsCompressor();
+    osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+    const buf=await ctx.startRendering(), d=buf.getChannelData(0);
+    let sum=0; for(let i=0;i<500;i++) sum+=Math.abs(d[i]);
+    const hex='0x'+(sum*1e6|0).toString(16).toUpperCase().padStart(8,'0');
+    set('audio-api','✓ Unterstützt','accent'); set('audio-hash',hex); return hex;
+  }catch(e){set('audio-api','Nicht verfügbar');return '';}
+}
+
+function detectFonts() {
+  const fonts=['Arial','Verdana','Georgia','Times New Roman','Courier New','Trebuchet MS',
+    'Comic Sans MS','Impact','Helvetica Neue','Palatino','Garamond','Tahoma','Century Gothic',
+    'Lucida Console','Monaco','Consolas','Calibri','Cambria','Segoe UI','Ubuntu','Futura'];
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');
+  ctx.font='72px monospace'; const bw=ctx.measureText('mmmmmmmmmmlli').width;
+  const found=fonts.filter(f=>{ctx.font=`72px '${f}',monospace`;return ctx.measureText('mmmmmmmmmmlli').width!==bw;});
+  set('fonts',found.length?found.join(', '):'— (keine erkannt)');
+  set('font-hash',simpleHash(found.join('|')));
+  return found.join('|');
+}
+
+async function checkPermissions() {
+  for(const [name,id] of [['camera','camera'],['microphone','mic'],['notifications','notifs'],['geolocation','geo-api']]) {
+    try {
+      const r=await navigator.permissions.query({name});
+      set(id,r.state==='granted'?'✓ Erlaubt':r.state==='denied'?'✗ Verweigert':'⚠ Nicht gefragt',
+        r.state==='granted'?'warn':r.state==='denied'?'danger':'');
+    }catch(e){set(id,'Nicht prüfbar');}
+  }
+}
+
+async function gatherBattery() {
+  try {
+    const b=await navigator.getBattery();
+    const pct=Math.round(b.level*100);
+    set('battery',pct+'%',pct<20?'danger':'accent');
+    set('battery-charging',b.charging?'✓ Wird geladen':'✗ Nicht geladen',b.charging?'accent':'');
+    set('battery-time',b.charging?(b.chargingTime===Infinity?'Vollständig':Math.round(b.chargingTime/60)+' min bis voll'):(b.dischargingTime===Infinity?'Unbekannt':Math.round(b.dischargingTime/60)+' min verbleibend'));
+  }catch(e){['battery','battery-charging','battery-time'].forEach(id=>set(id,'Nicht verfügbar'));}
+}
+
+async function gatherStorageEst() {
+  try {
+    const e=await navigator.storage.estimate();
+    set('storage-est',e.quota?(e.quota/1e9).toFixed(1)+' GB':'—');
+    set('storage-free',(e.usage!=null&&e.quota)?((e.quota-e.usage)/1e9).toFixed(2)+' GB frei':'—');
+  }catch(e){}
+}
+
+function detectAdBlock() {
+  const b=document.createElement('div');
+  b.className='ad banner ads advertisement';
+  b.style.cssText='position:absolute;top:-9999px;height:1px;width:1px;';
+  document.body.appendChild(b);
+  const blocked=b.offsetParent===null||!b.clientWidth;
+  b.remove();
+  set('adblock',blocked?'✓ Erkannt':'✗ Nicht erkannt',blocked?'warn':'accent');
+}
+
+async function detectIncognito() {
+  try {
+    const fs=window.RequestFileSystem||window.webkitRequestFileSystem;
+    if(!fs){set('incognito','Nicht prüfbar');return;}
+    await new Promise((r,j)=>fs(window.TEMPORARY,100,r,j));
+    set('incognito','✗ Normal-Modus','accent');
+  }catch(e){set('incognito','⚠ Möglicherweise Inkognito','warn');}
+}
+
+function detectWebRTC() {
+  if(!window.RTCPeerConnection){set('webrtc-local','Nicht unterstützt');set('webrtc-public','Nicht unterstützt');return;}
+  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  const lo=new Set(),pu=new Set();
+  pc.createDataChannel('');
+  pc.onicecandidate=e=>{
+    if(!e.candidate)return;
+    const m=e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[\da-f:]{2,39})/gi);
+    if(!m)return;
+    m.forEach(ip=>{if(/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip))lo.add(ip);else if(!ip.startsWith('0.0.0.0')&&ip!=='::1')pu.add(ip);});
+    set('webrtc-local',lo.size?[...lo].join(', '):'— (kein Leak)',lo.size?'danger':'accent');
+    set('webrtc-public',pu.size?[...pu].join(', '):'— (kein Leak)',pu.size?'danger':'accent');
+  };
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
+  setTimeout(()=>pc.close(),6000);
+}
+
+function gatherPlugins() {
+  const plugins=Array.from(navigator.plugins||[]);
+  const tbody=$('plugin-rows');
+  if(!plugins.length){tbody.innerHTML='<tr><td colspan="3" style="color:var(--text2)">Keine Plugins erkannt</td></tr>';return;}
+  tbody.innerHTML=plugins.map(p=>`<tr><td>${p.name}</td><td style="color:var(--text2);font-size:0.65rem;">${p.description||'—'}</td><td style="color:var(--text2);font-size:0.65rem;">${Array.from(p).map(m=>m.type).join(', ')||'—'}</td></tr>`).join('');
+  set('font-hash',simpleHash(plugins.map(p=>p.name).join('|')));
+}
+
+// ── Main init ─────────────────────────────────────────────────────────────────
+async function init() {
+  parseUA(); gatherSystem(); gatherScreen(); gatherTime();
+  gatherStorage(); gatherNetwork(); gatherWebGL();
+  detectAdBlock(); gatherPlugins(); detectWebRTC();
+
+  // Fetch IP/Geo via Anthropic API
+  try {
+    const ipData = await fetchIPData();
+    const { lat, lng, city, country, ip, isp } = renderIPData(ipData);
+    initMap(lat, lng, city, country, ip, isp);
+  } catch(err) {
+    console.error('IP fetch error:', err);
+    $('ip-box').textContent = 'Fehler';
+    $('ip-box').style.color = 'var(--red)';
+    $('map-loading').innerHTML = `<span style="color:var(--red)">⚠ IP-Daten konnten nicht geladen werden</span><small style="color:var(--text2);margin-top:0.5rem;font-size:0.65rem">${err.message}</small>`;
+    ['ip4','ip6','isp','asn','org','city','region','country','coords','timezone','localtime'].forEach(id=>set(id,'Fehler','danger'));
+  }
+
+  const [audioHash] = await Promise.all([
+    gatherAudio(), detectIncognito(), checkPermissions(), gatherBattery(), gatherStorageEst()
+  ]);
+  const canvasHash = gatherCanvas();
+  const fontStr    = detectFonts();
+
+  set('fp-hash', simpleHash([
+    navigator.userAgent,
+    screen.width+'x'+screen.height+'x'+(window.devicePixelRatio||1),
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.language,
+    canvasHash, audioHash||'', fontStr,
+    navigator.hardwareConcurrency||'', navigator.deviceMemory||''
+  ].join('|')), 'accent');
+}
+
+init();
+</script>
+</body>
+</html>
+    audio:   audioHash  || '',
+    fonts:   fontStr,
+    cores:   navigator.hardwareConcurrency || '',
+    ram:     navigator.deviceMemory || ''
+  });
+  set('fp-hash', '0x' + fp, 'accent');
+}
+
+init();
+</script>
+</body>
+</html>
