@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhoAmIWeb — Dein digitaler Fingerabdruck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--accent:#00ff88;--accent2:#ff3366;--accent3:#00aaff;--text:#e8e8f0;--text2:#8888aa;--border:rgba(0,255,136,0.15);--red:#ff3366;--yellow:#ffcc00;--mono:'Space Mono',monospace;--display:'Syne',sans-serif;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);min-height:100vh;overflow-x:hidden;}
+  .scanline{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.05) 2px,rgba(0,0,0,.05) 4px);pointer-events:none;z-index:1000;}
+  header{border-bottom:1px solid var(--border);padding:2rem 3rem;display:flex;align-items:center;justify-content:space-between;background:rgba(10,10,15,.95);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+  .logo{font-family:var(--display);font-size:1.6rem;font-weight:800;letter-spacing:-.02em;}
+  .logo span{color:var(--accent);}
+  .status-bar{display:flex;gap:1.5rem;align-items:center;font-size:.72rem;color:var(--text2);}
+  .pulse{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 1.5s infinite;display:inline-block;margin-right:6px;}
+  @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,136,.4)}50%{opacity:.8;box-shadow:0 0 0 6px rgba(0,255,136,0)}}
+  .main{max-width:1400px;margin:0 auto;padding:2rem 3rem 4rem;}
+  .hero{text-align:center;padding:3rem 0 2rem;border-bottom:1px solid var(--border);margin-bottom:2rem;}
+  .hero h1{font-family:var(--display);font-size:clamp(2rem,5vw,4rem);font-weight:800;line-height:1.1;margin-bottom:1rem;}
+  .hero h1 .h1{color:var(--accent);}.hero h1 .h2{color:var(--accent2);}
+  .hero-sub{color:var(--text2);font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;}
+  .ip-display{margin:2rem auto;display:inline-block;background:var(--bg3);border:1px solid var(--accent);border-radius:4px;padding:1rem 2.5rem;font-size:2rem;font-weight:700;color:var(--accent);letter-spacing:.05em;position:relative;}
+  .ip-display::before{content:'DEINE IP-ADRESSE';position:absolute;top:4px;left:12px;font-size:.6rem;color:var(--text2);letter-spacing:.15em;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:1.5rem;margin-bottom:1.5rem;}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:2px;overflow:hidden;transition:border-color .3s;}
+  .card:hover{border-color:rgba(0,255,136,.35);}
+  .card-header{padding:.85rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.75rem;background:rgba(0,255,136,.04);}
+  .card-icon{width:28px;height:28px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.3);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:.9rem;}
+  .card-title{font-family:var(--display);font-weight:700;font-size:.85rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
+  .card-body{padding:1.25rem;}
+  .info-row{display:flex;justify-content:space-between;align-items:flex-start;padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.04);gap:1rem;}
+  .info-row:last-child{border-bottom:none;}
+  .info-key{color:var(--text2);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;min-width:145px;flex-shrink:0;}
+  .info-val{font-size:.78rem;color:var(--text);text-align:right;word-break:break-all;}
+  .info-val.accent{color:var(--accent);}.info-val.danger{color:var(--red);}.info-val.warn{color:var(--yellow);}.info-val.info{color:var(--accent3);}
+  #map{width:100%;height:420px;display:none;}
+  .map-shell{position:relative;}
+  .map-loading{height:420px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;background:var(--bg3);color:var(--text2);font-size:.75rem;letter-spacing:.1em;}
+  .map-coords{padding:.75rem 1.25rem;background:var(--bg3);border-top:1px solid var(--border);display:flex;gap:2rem;font-size:.72rem;flex-wrap:wrap;}
+  .mc-label{color:var(--text2);margin-right:.4rem;}
+  .section-label{font-size:.65rem;color:var(--text2);text-transform:uppercase;letter-spacing:.15em;margin-bottom:1.5rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);}
+  .warning-box{background:rgba(255,51,102,.06);border:1px solid rgba(255,51,102,.25);border-radius:2px;padding:1rem 1.25rem;margin-top:2rem;font-size:.72rem;color:var(--text2);line-height:1.7;}
+  .warning-box strong{color:var(--red);display:block;margin-bottom:.5rem;font-size:.8rem;}
+  .scan-anim{position:relative;overflow:hidden;}
+  .scan-anim::after{content:'';position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 3s linear infinite;top:0;}
+  @keyframes scan{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+  .loading-text{color:var(--text2);font-size:.75rem;animation:blink 1s step-end infinite;}
+  @keyframes blink{50%{opacity:0}}
+  table.dt{width:100%;border-collapse:collapse;font-size:.72rem;}
+  table.dt td,table.dt th{padding:.5rem .75rem;border-bottom:1px solid rgba(255,255,255,.04);text-align:left;}
+  table.dt th{color:var(--text2);font-weight:400;text-transform:uppercase;letter-spacing:.08em;background:rgba(0,255,136,.03);}
+  table.dt tr:last-child td{border-bottom:none;}
+  .leaflet-popup-content-wrapper{background:#1a1a24!important;border:1px solid rgba(0,255,136,.3)!important;border-radius:2px!important;color:#e8e8f0!important;box-shadow:0 4px 24px rgba(0,0,0,.6)!important;}
+  .leaflet-popup-tip{background:#1a1a24!important;}
+  @media(max-width:700px){header,.main{padding-left:1rem;padding-right:1rem}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+<header>
+  <div class="logo">Who<span>Am</span>IWeb</div>
+  <div class="status-bar">
+    <span><span class="pulse"></span>LIVE SCAN AKTIV</span>
+    <span id="live-time">--:--:--</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="hero">
+    <h1>Alles, was das <span class="h1">Internet</span> über<br>dich <span class="h2">weiß</span>.</h1>
+    <div class="hero-sub">Gesammelte Daten · Digitaler Fingerabdruck · Live-Standort</div>
+    <div class="ip-display" id="ip-box"><span class="loading-text">Wird geladen…</span></div>
+  </div>
+
+  <div class="section-label">01 / Netzwerk & Standort</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🌐</div><div class="card-title">IP-Informationen</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">IPv4</span><span class="info-val accent" id="ip4"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">IPv6</span><span class="info-val info" id="ip6"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ISP / Provider</span><span class="info-val" id="isp"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">ASN</span><span class="info-val info" id="asn">—</span></div>
+        <div class="info-row"><span class="info-key">Organisation</span><span class="info-val" id="org">—</span></div>
+        <div class="info-row"><span class="info-key">Hosting / Datacenter</span><span class="info-val" id="hosting">—</span></div>
+        <div class="info-row"><span class="info-key">Proxy / VPN</span><span class="info-val" id="proxy">—</span></div>
+        <div class="info-row"><span class="info-key">Mobile Verbindung</span><span class="info-val" id="mobile">—</span></div>
+        <div class="info-row"><span class="info-key">Reverse-DNS (PTR)</span><span class="info-val info" id="rdns"><span class="loading-text">…</span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">📍</div><div class="card-title">Geografischer Standort</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Stadt</span><span class="info-val" id="city"><span class="loading-text">…</span></span></div>
+        <div class="info-row"><span class="info-key">Region / Bundesland</span><span class="info-val" id="region">—</span></div>
+        <div class="info-row"><span class="info-key">Land</span><span class="info-val" id="country">—</span></div>
+        <div class="info-row"><span class="info-key">Kontinent</span><span class="info-val" id="continent">—</span></div>
+        <div class="info-row"><span class="info-key">Postleitzahl</span><span class="info-val" id="postal">—</span></div>
+        <div class="info-row"><span class="info-key">Koordinaten</span><span class="info-val accent" id="coords">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="timezone">—</span></div>
+        <div class="info-row"><span class="info-key">Ortszeit (IP-Zone)</span><span class="info-val" id="localtime">—</span></div>
+        <div class="info-row"><span class="info-key">Genauigkeit</span><span class="info-val warn">~20–50 km Radius</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="card scan-anim" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🗺</div><div class="card-title">Live-Standortkarte (IP-basiert · CartoDB Dark)</div></div>
+    <div class="map-shell">
+      <div class="map-loading" id="map-loading"><span class="loading-text">Kartendaten werden geladen…</span></div>
+      <div id="map"></div>
+    </div>
+    <div class="map-coords">
+      <div><span class="mc-label">LAT</span><span id="lat-d">—</span></div>
+      <div><span class="mc-label">LNG</span><span id="lng-d">—</span></div>
+      <div><span class="mc-label">STADT</span><span id="map-city">—</span></div>
+      <div><span class="mc-label">LAND</span><span id="map-country">—</span></div>
+      <div><span class="mc-label">QUELLE</span><span id="api-source">—</span></div>
+      <div><span class="mc-label">GENAUIGKEIT</span><span style="color:var(--yellow)">~20–50 km</span></div>
+    </div>
+  </div>
+
+  <div class="section-label">02 / Browser & Betriebssystem</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🖥</div><div class="card-title">Browser</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser</span><span class="info-val" id="browser-name">—</span></div>
+        <div class="info-row"><span class="info-key">Version</span><span class="info-val" id="browser-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Engine</span><span class="info-val" id="browser-engine">—</span></div>
+        <div class="info-row"><span class="info-key">Sprache</span><span class="info-val" id="browser-lang">—</span></div>
+        <div class="info-row"><span class="info-key">Alle Sprachen</span><span class="info-val" id="browser-langs">—</span></div>
+        <div class="info-row"><span class="info-key">DNT-Header</span><span class="info-val" id="dnt">—</span></div>
+        <div class="info-row"><span class="info-key">Cookies aktiv</span><span class="info-val" id="cookies">—</span></div>
+        <div class="info-row"><span class="info-key">JavaScript</span><span class="info-val accent">Aktiv ✓</span></div>
+        <div class="info-row"><span class="info-key">User-Agent</span><span class="info-val" id="ua" style="font-size:.62rem;">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">💻</div><div class="card-title">Gerät & Betriebssystem</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Betriebssystem</span><span class="info-val" id="os">—</span></div>
+        <div class="info-row"><span class="info-key">OS-Version</span><span class="info-val" id="os-ver">—</span></div>
+        <div class="info-row"><span class="info-key">Gerät</span><span class="info-val" id="device">—</span></div>
+        <div class="info-row"><span class="info-key">Gerätekategorie</span><span class="info-val" id="device-cat">—</span></div>
+        <div class="info-row"><span class="info-key">CPU-Kerne</span><span class="info-val" id="cpu-cores">—</span></div>
+        <div class="info-row"><span class="info-key">RAM (approx.)</span><span class="info-val" id="ram">—</span></div>
+        <div class="info-row"><span class="info-key">Plattform</span><span class="info-val" id="platform">—</span></div>
+        <div class="info-row"><span class="info-key">Touch-Gerät</span><span class="info-val" id="touch">—</span></div>
+        <div class="info-row"><span class="info-key">Max. Touch-Punkte</span><span class="info-val" id="touch-points">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">03 / Bildschirm & Verbindung</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🖥</div><div class="card-title">Bildschirm</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Auflösung</span><span class="info-val accent" id="resolution">—</span></div>
+        <div class="info-row"><span class="info-key">Verfügbar</span><span class="info-val" id="avail-res">—</span></div>
+        <div class="info-row"><span class="info-key">Viewport</span><span class="info-val" id="viewport">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeldichte (DPR)</span><span class="info-val" id="dpr">—</span></div>
+        <div class="info-row"><span class="info-key">Farbtiefe</span><span class="info-val" id="color-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Pixeltiefe</span><span class="info-val" id="pixel-depth">—</span></div>
+        <div class="info-row"><span class="info-key">Orientierung</span><span class="info-val" id="orientation">—</span></div>
+        <div class="info-row"><span class="info-key">Dunkelmodus</span><span class="info-val" id="dark-mode">—</span></div>
+        <div class="info-row"><span class="info-key">HDR-Unterstützung</span><span class="info-val" id="hdr">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">📡</div><div class="card-title">Verbindung & Netzwerk</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Verbindungstyp</span><span class="info-val" id="conn-type">—</span></div>
+        <div class="info-row"><span class="info-key">Effektiver Typ</span><span class="info-val" id="conn-eff">—</span></div>
+        <div class="info-row"><span class="info-key">Bandbreite</span><span class="info-val" id="bandwidth">—</span></div>
+        <div class="info-row"><span class="info-key">RTT (Latenz)</span><span class="info-val" id="rtt">—</span></div>
+        <div class="info-row"><span class="info-key">Data Saver</span><span class="info-val" id="data-saver">—</span></div>
+        <div class="info-row"><span class="info-key">Online-Status</span><span class="info-val" id="online">—</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (lokal)</span><span class="info-val" id="webrtc-local">Wird geprüft…</span></div>
+        <div class="info-row"><span class="info-key">WebRTC IP (public)</span><span class="info-val" id="webrtc-public">Wird geprüft…</span></div>
+        <div class="info-row"><span class="info-key">HTTPS</span><span class="info-val" id="https">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">04 / Sicherheit & Datenschutz</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🔒</div><div class="card-title">Sicherheits-Check</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Ad-Blocker</span><span class="info-val" id="adblock">—</span></div>
+        <div class="info-row"><span class="info-key">Do Not Track</span><span class="info-val" id="dnt2">—</span></div>
+        <div class="info-row"><span class="info-key">Inkognito-Modus</span><span class="info-val" id="incognito">—</span></div>
+        <div class="info-row"><span class="info-key">LocalStorage</span><span class="info-val" id="localstorage">—</span></div>
+        <div class="info-row"><span class="info-key">SessionStorage</span><span class="info-val" id="sessionstorage">—</span></div>
+        <div class="info-row"><span class="info-key">IndexedDB</span><span class="info-val" id="indexeddb">—</span></div>
+        <div class="info-row"><span class="info-key">Service Worker</span><span class="info-val" id="sw">—</span></div>
+        <div class="info-row"><span class="info-key">WebAssembly</span><span class="info-val" id="wasm">—</span></div>
+        <div class="info-row"><span class="info-key">Flash</span><span class="info-val">Nicht verfügbar</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🍪</div><div class="card-title">Plugins & APIs</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">WebGL</span><span class="info-val" id="webgl">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Renderer</span><span class="info-val" id="webgl-renderer" style="font-size:.65rem;">—</span></div>
+        <div class="info-row"><span class="info-key">WebGL Vendor</span><span class="info-val" id="webgl-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Canvas FP</span><span class="info-val" id="canvas-fp">—</span></div>
+        <div class="info-row"><span class="info-key">Audio API</span><span class="info-val" id="audio-api">—</span></div>
+        <div class="info-row"><span class="info-key">Kamera-Zugriff</span><span class="info-val" id="camera">—</span></div>
+        <div class="info-row"><span class="info-key">Mikrofon-Zugriff</span><span class="info-val" id="mic">—</span></div>
+        <div class="info-row"><span class="info-key">Benachrichtigungen</span><span class="info-val" id="notifs">—</span></div>
+        <div class="info-row"><span class="info-key">Geolokation API</span><span class="info-val" id="geo-api">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">05 / Zeit, Akku & Sonstiges</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><div class="card-icon">⏰</div><div class="card-title">Zeit & Datum</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Browser-Zeit</span><span class="info-val accent" id="browser-time">—</span></div>
+        <div class="info-row"><span class="info-key">Zeitzone</span><span class="info-val" id="tz">—</span></div>
+        <div class="info-row"><span class="info-key">UTC-Versatz</span><span class="info-val" id="utc-offset">—</span></div>
+        <div class="info-row"><span class="info-key">Sommerzeit aktiv</span><span class="info-val" id="dst">—</span></div>
+        <div class="info-row"><span class="info-key">Datumsformat</span><span class="info-val" id="date-format">—</span></div>
+        <div class="info-row"><span class="info-key">Wochentag</span><span class="info-val" id="weekday">—</span></div>
+        <div class="info-row"><span class="info-key">Uptime (Seite)</span><span class="info-val" id="uptime">—</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon">🔋</div><div class="card-title">Akku & Hardware</div></div>
+      <div class="card-body">
+        <div class="info-row"><span class="info-key">Akkustand</span><span class="info-val" id="battery">—</span></div>
+        <div class="info-row"><span class="info-key">Ladestatus</span><span class="info-val" id="battery-charging">—</span></div>
+        <div class="info-row"><span class="info-key">Ladezeit</span><span class="info-val" id="battery-time">—</span></div>
+        <div class="info-row"><span class="info-key">GPU (WebGL)</span><span class="info-val" id="gpu">—</span></div>
+        <div class="info-row"><span class="info-key">Speicherkapazität</span><span class="info-val" id="storage-est">—</span></div>
+        <div class="info-row"><span class="info-key">Freier Speicher</span><span class="info-val" id="storage-free">—</span></div>
+        <div class="info-row"><span class="info-key">Navigator Vendor</span><span class="info-val" id="nav-vendor">—</span></div>
+        <div class="info-row"><span class="info-key">Produkt</span><span class="info-val" id="nav-product">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label">06 / Digitaler Fingerabdruck</div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🔍</div><div class="card-title">Browser-Fingerabdruck</div></div>
+    <div class="card-body">
+      <div class="info-row"><span class="info-key">Fingerabdruck-Hash</span><span class="info-val accent" id="fp-hash">Wird berechnet…</span></div>
+      <div class="info-row"><span class="info-key">Canvas-Hash</span><span class="info-val" id="canvas-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Audio-Hash</span><span class="info-val" id="audio-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Font-Hash</span><span class="info-val" id="font-hash">—</span></div>
+      <div class="info-row"><span class="info-key">Erkannte Schriften</span><span class="info-val" id="fonts" style="font-size:.65rem;">—</span></div>
+      <div class="info-row"><span class="info-key">Einzigartigkeit</span><span class="info-val warn">Sehr hoch — du bist erkennbar</span></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header"><div class="card-icon">🔌</div><div class="card-title">Browser-Plugins</div></div>
+    <div class="card-body">
+      <table class="dt"><thead><tr><th>Name</th><th>Beschreibung</th><th>Dateitypen</th></tr></thead>
+      <tbody id="plugin-rows"><tr><td colspan="3" style="color:var(--text2)">Wird geladen…</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <div class="warning-box">
+    <strong>⚠ Datenschutz-Hinweis</strong>
+    Diese Seite speichert keine Daten. IP-Geolokalisierung über <strong>ipwho.is → ipapi.co → ipinfo.io</strong> (alle HTTPS, kein API-Key nötig). Karte via <strong>Leaflet + CartoDB Dark Matter</strong>. Reverse-DNS via <strong>dns.google</strong>.
+  </div>
+</div>
+
+<script>
+/* ─── Utils ──────────────────────────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const set = (id, val, cls) => {
+  const el = $(id); if (!el) return;
+  el.textContent = (val !== null && val !== undefined && String(val).trim() !== '') ? val : '—';
+  if (cls !== undefined) el.className = 'info-val ' + (cls || '');
+};
+function h32(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return '0x' + h.toString(16).toUpperCase().padStart(8, '0');
+}
+const CONT = {AF:'Afrika',AN:'Antarktis',AS:'Asien',EU:'Europa',NA:'Nordamerika',OC:'Ozeanien',SA:'Südamerika'};
+function flag(c) {
+  if (!c || c.length !== 2) return '';
+  return String.fromCodePoint(...[...c.toUpperCase()].map(x => 0x1F1E6 - 65 + x.charCodeAt(0)));
+}
+
+/* ─── Clock ──────────────────────────────────────────────────────────────── */
+const T0 = Date.now();
+(function tick() {
+  const n = new Date();
+  $('live-time').textContent    = n.toLocaleTimeString('de-DE');
+  $('browser-time').textContent = n.toLocaleString('de-DE');
+  $('uptime').textContent = Math.floor((Date.now()-T0)/1000) + 's';
+  setTimeout(tick, 1000);
+})();
+
+/* ─── IP Geo — 3-API fallback chain, all pure HTTPS + CORS ──────────────── */
+/*
+  1. ipwho.is      — free, no key, HTTPS, CORS ✓
+  2. ipapi.co      — free, no key, HTTPS, CORS ✓  (45 req/day limit but fine)
+  3. ipinfo.io     — free, no key, HTTPS, CORS ✓  (50k req/month)
+*/
+async function tryFetch(url, timeout = 5000) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const r = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch(e) { clearTimeout(tid); throw e; }
+}
+
+// Normalise different API shapes into one common object
+function normalise(d, source) {
+  // ipwho.is shape
+  if (source === 'ipwho.is') return {
+    ip:            d.ip,
+    isp:           d.connection?.isp || d.org || '',
+    org:           d.org || '',
+    asn:           d.connection?.asn ? 'AS' + d.connection.asn : '',
+    hosting:       false,
+    proxy:         false,
+    mobile:        d.connection?.domain?.includes('mobile') || false,
+    city:          d.city || '',
+    region:        d.region || '',
+    country:       d.country || '',
+    countryCode:   d.country_code || '',
+    continent:     d.continent || '',
+    continentCode: d.continent_code || '',
+    postal:        d.postal || '',
+    lat:           d.latitude,
+    lon:           d.longitude,
+    timezone:      d.timezone?.id || '',
+    source:        'ipwho.is'
+  };
+  // ipapi.co shape
+  if (source === 'ipapi.co') return {
+    ip:            d.ip,
+    isp:           d.org || '',
+    org:           d.org || '',
+    asn:           d.asn || '',
+    hosting:       false,
+    proxy:         false,
+    mobile:        false,
+    city:          d.city || '',
+    region:        d.region || '',
+    country:       d.country_name || '',
+    countryCode:   d.country_code || '',
+    continent:     '',
+    continentCode: d.continent_code || '',
+    postal:        d.postal || '',
+    lat:           d.latitude,
+    lon:           d.longitude,
+    timezone:      d.timezone || '',
+    source:        'ipapi.co'
+  };
+  // ipinfo.io shape
+  if (source === 'ipinfo.io') {
+    const [lat, lon] = (d.loc || '0,0').split(',').map(Number);
+    return {
+      ip:            d.ip,
+      isp:           d.org || '',
+      org:           d.org || '',
+      asn:           (d.org || '').split(' ')[0] || '',
+      hosting:       false,
+      proxy:         d.privacy?.proxy || false,
+      mobile:        d.privacy?.hosting || false,
+      city:          d.city || '',
+      region:        d.region || '',
+      country:       d.country || '',
+      countryCode:   d.country || '',
+      continent:     '',
+      continentCode: '',
+      postal:        d.postal || '',
+      lat, lon,
+      timezone:      d.timezone || '',
+      source:        'ipinfo.io'
+    };
+  }
+}
+
+async function fetchGeoIP() {
+  // Try each API in sequence; move on if one fails
+  const apis = [
+    { url: 'https://ipwho.is/',           src: 'ipwho.is',  ok: d => d && d.success !== false && d.ip },
+    { url: 'https://ipapi.co/json/',      src: 'ipapi.co',  ok: d => d && !d.error && d.ip },
+    { url: 'https://ipinfo.io/json',      src: 'ipinfo.io', ok: d => d && d.ip }
+  ];
+  for (const api of apis) {
+    try {
+      const d = await tryFetch(api.url);
+      if (api.ok(d)) return normalise(d, api.src);
+    } catch(e) { console.warn(api.src, 'failed:', e.message); }
+  }
+  throw new Error('Alle IP-APIs nicht erreichbar');
+}
+
+/* ─── IPv6 via api6.ipify.org ────────────────────────────────────────────── */
+async function detectIPv6() {
+  try {
+    const d = await tryFetch('https://api6.ipify.org?format=json', 3000);
+    return d.ip && d.ip.includes(':') ? d.ip : null;
+  } catch(e) { return null; }
+}
+
+/* ─── Reverse-DNS via dns.google DoH ─────────────────────────────────────── */
+async function reverseDNS(ip) {
+  if (!ip || ip.includes(':')) return null;
+  try {
+    const arpa = ip.split('.').reverse().join('.') + '.in-addr.arpa';
+    const d = await tryFetch(`https://dns.google/resolve?name=${arpa}&type=PTR`, 3000);
+    return d?.Answer?.[0]?.data?.replace(/\.$/, '') || null;
+  } catch(e) { return null; }
+}
+
+/* ─── Render geo data ────────────────────────────────────────────────────── */
+function renderGeo(d, ipv6, rdns) {
+  const ip = d.ip || '—';
+  $('ip-box').textContent = ip;
+  $('api-source').textContent = d.source || '—';
+
+  set('ip4', ip, 'accent');
+  set('ip6', ipv6 || 'Nicht erkannt (IPv4-Verbindung)', ipv6 ? 'info' : '');
+  set('isp', d.isp || '—');
+  set('asn', d.asn || '—', 'info');
+  set('org', d.org || '—');
+  set('hosting', d.hosting ? '✓ Datacenter/Hosting' : '✗ Privat/Residential', d.hosting ? 'warn' : 'accent');
+  set('proxy',   d.proxy   ? '✓ Proxy / VPN erkannt' : '✗ Kein Proxy/VPN',   d.proxy   ? 'danger' : 'accent');
+  set('mobile',  d.mobile  ? '✓ Mobilfunk'           : '✗ Festnetz/DSL',     d.mobile  ? 'warn' : 'accent');
+  set('rdns', rdns || '— (kein PTR-Eintrag)', rdns ? 'info' : '');
+
+  set('city',   d.city   || '—');
+  set('region', d.region || '—');
+
+  const f = flag(d.countryCode);
+  set('country', [d.country, f, d.countryCode ? `(${d.countryCode})` : ''].filter(Boolean).join(' '));
+
+  const cc = d.continentCode;
+  set('continent', cc ? `${CONT[cc] || d.continent || cc} (${cc})` : (d.continent || '—'));
+  set('postal',    d.postal || '—');
+
+  const lat = parseFloat(d.lat), lon = parseFloat(d.lon);
+  if (!isNaN(lat) && !isNaN(lon)) {
+    set('coords', `${lat.toFixed(4)}, ${lon.toFixed(4)}`, 'accent');
+    $('lat-d').textContent = lat.toFixed(4);
+    $('lng-d').textContent = lon.toFixed(4);
+  } else {
+    set('coords', 'Nicht verfügbar', 'warn');
+  }
+
+  set('timezone', d.timezone || '—');
+  if (d.timezone) {
+    try {
+      set('localtime', new Intl.DateTimeFormat('de-DE', {
+        timeZone: d.timezone, dateStyle: 'medium', timeStyle: 'medium'
+      }).format(new Date()));
+    } catch(e) { set('localtime', '—'); }
+  }
+
+  $('map-city').textContent    = d.city    || '—';
+  $('map-country').textContent = d.country || '—';
+
+  return { lat, lon, city: d.city, country: d.country, ip, isp: d.isp || d.org };
+}
+
+/* ─── Leaflet + CartoDB Dark Matter (free, no key, HTTPS ✓) ─────────────── */
+function initMap(lat, lon, city, country, ip, isp) {
+  const loadEl = $('map-loading'), mapEl = $('map');
+  if (isNaN(lat)||isNaN(lon)) {
+    loadEl.innerHTML = '<span style="color:var(--red)">⚠ Koordinaten nicht verfügbar</span>';
+    return;
+  }
+  loadEl.style.display = 'none';
+  mapEl.style.display  = 'block';
+
+  // Inject pulse animation once
+  if (!document.getElementById('mpulse-kf')) {
+    const s = document.createElement('style'); s.id = 'mpulse-kf';
+    s.textContent = '@keyframes mp{0%{transform:scale(1);opacity:.45}70%{transform:scale(4);opacity:0}100%{transform:scale(4);opacity:0}}';
+    document.head.appendChild(s);
+  }
+
+  const map = L.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([lat, lon], 11);
+
+  // CartoDB Dark Matter — HTTPS, free, no API key needed, perfect dark style
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://openstreetmap.org" style="color:#888">OSM</a> © <a href="https://carto.com" style="color:#888">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    detectRetina: true
+  }).addTo(map);
+
+  // Pulsing green marker
+  const icon = L.divIcon({
+    html: `<div style="position:relative;width:24px;height:24px">
+      <div style="position:absolute;inset:0;border-radius:50%;background:#00ff88;animation:mp 2s ease-out infinite"></div>
+      <div style="position:absolute;inset:6px;border-radius:50%;background:#00ff88;border:2px solid #fff;box-shadow:0 0 12px rgba(0,255,136,.9)"></div>
+    </div>`,
+    className: '', iconSize: [24,24], iconAnchor: [12,12], popupAnchor: [0,-14]
+  });
+
+  L.marker([lat, lon], { icon }).addTo(map)
+    .bindPopup(`
+      <div style="font-family:monospace;font-size:.73rem;line-height:1.8;color:#e8e8f0">
+        <strong style="color:#00ff88">${city||'?'}, ${country||'?'}</strong><br>
+        <span style="color:#8888aa">IP:</span> ${ip}<br>
+        <span style="color:#8888aa">ISP:</span> ${isp||'—'}<br>
+        <span style="color:#8888aa">Coords:</span> ${lat.toFixed(4)}, ${lon.toFixed(4)}<br>
+        <span style="color:#555;font-size:.62rem">Genauigkeit ~20–50 km</span>
+      </div>`, { maxWidth: 260 }).openPopup();
+
+  // Accuracy radius circle
+  L.circle([lat, lon], {
+    radius: 30000, color: '#00ff88', fillColor: '#00ff88',
+    fillOpacity: .06, weight: 1, dashArray: '6 5'
+  }).addTo(map);
+
+  // Critical: fix grey tiles when div was hidden
+  setTimeout(() => map.invalidateSize(), 250);
+  setTimeout(() => map.invalidateSize(), 800);
+}
+
+/* ─── All other browser data ─────────────────────────────────────────────── */
+function parseUA() {
+  const ua = navigator.userAgent; $('ua').textContent = ua;
+  let b='Unbekannt',v='',e='';
+  if(/Edg\//.test(ua))          {b='Microsoft Edge';  v=ua.match(/Edg\/([\d.]+)/)?.[1]||'';      e='Blink';}
+  else if(/OPR\//.test(ua))     {b='Opera';           v=ua.match(/OPR\/([\d.]+)/)?.[1]||'';      e='Blink';}
+  else if(/Chrome\//.test(ua)&&!/Chromium/.test(ua)){b='Google Chrome';v=ua.match(/Chrome\/([\d.]+)/)?.[1]||'';e='Blink';}
+  else if(/Firefox\//.test(ua)) {b='Mozilla Firefox'; v=ua.match(/Firefox\/([\d.]+)/)?.[1]||'';  e='Gecko';}
+  else if(/Safari\//.test(ua)&&!/Chrome/.test(ua)){b='Apple Safari';v=ua.match(/Version\/([\d.]+)/)?.[1]||'';e='WebKit';}
+  else if(/Chromium\//.test(ua)){b='Chromium';        v=ua.match(/Chromium\/([\d.]+)/)?.[1]||''; e='Blink';}
+  set('browser-name',b);set('browser-ver',v||'—');set('browser-engine',e||'—');
+  let os='Unbekannt',ov='';
+  if(/Windows NT 10/.test(ua))         {os='Windows';ov='10 / 11';}
+  else if(/Windows NT 6\.3/.test(ua))  {os='Windows';ov='8.1';}
+  else if(/Mac OS X ([\d_]+)/.test(ua)){os='macOS';  ov=ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g,'.')||'';}
+  else if(/Android ([\d.]+)/.test(ua)) {os='Android';ov=ua.match(/Android ([\d.]+)/)?.[1]||'';}
+  else if(/iPhone OS ([\d_]+)/.test(ua)){os='iOS';   ov=ua.match(/iPhone OS ([\d_]+)/)?.[1]?.replace(/_/g,'.')||'';}
+  else if(/Linux/.test(ua))            {os='Linux';}
+  set('os',os);set('os-ver',ov||'Unbekannt');
+  const mob=/Mobi|Android/i.test(ua);
+  set('device',mob?'Smartphone':'Desktop / Laptop');
+  set('device-cat',mob?'Smartphone / Tablet':'PC / Mac',mob?'':'accent');
+}
+function gatherSystem(){
+  set('browser-lang',navigator.language||'—');
+  set('browser-langs',(navigator.languages||[navigator.language]).join(', '));
+  set('dnt',navigator.doNotTrack==='1'?'✓ Aktiv':navigator.doNotTrack==='0'?'✗ Deaktiviert':'Nicht gesetzt');
+  set('dnt2',navigator.doNotTrack==='1'?'✓ Aktiv':'✗ Inaktiv');
+  set('cookies',navigator.cookieEnabled?'✓ Aktiviert':'✗ Deaktiviert',navigator.cookieEnabled?'accent':'danger');
+  set('platform',navigator.platform||'—');
+  set('cpu-cores',navigator.hardwareConcurrency||'—');
+  set('ram',navigator.deviceMemory?navigator.deviceMemory+' GB':'Nicht verfügbar');
+  set('touch',navigator.maxTouchPoints>0?'✓ Ja':'✗ Nein');
+  set('touch-points',navigator.maxTouchPoints);
+  set('nav-vendor',navigator.vendor||'—');
+  set('nav-product',navigator.product||'—');
+}
+function gatherScreen(){
+  set('resolution',screen.width+' × '+screen.height);
+  set('avail-res',screen.availWidth+' × '+screen.availHeight);
+  set('viewport',window.innerWidth+' × '+window.innerHeight);
+  set('dpr',(window.devicePixelRatio||1)+'x');
+  set('color-depth',screen.colorDepth+' bit');
+  set('pixel-depth',screen.pixelDepth+' bit');
+  set('orientation',screen.orientation?.type||(window.innerWidth>window.innerHeight?'landscape':'portrait'));
+  set('dark-mode',window.matchMedia('(prefers-color-scheme: dark)').matches?'✓ Aktiviert':'✗ Deaktiviert');
+  set('hdr',window.matchMedia('(dynamic-range: high)').matches?'✓ Unterstützt':'—');
+}
+function gatherTime(){
+  const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;set('tz',tz);
+  const off=-new Date().getTimezoneOffset(),sign=off>=0?'+':'-';
+  set('utc-offset','UTC '+sign+Math.floor(Math.abs(off)/60).toString().padStart(2,'0')+':'+(Math.abs(off)%60).toString().padStart(2,'0'));
+  const jan=new Date(new Date().getFullYear(),0,1),jul=new Date(new Date().getFullYear(),6,1);
+  set('dst',new Date().getTimezoneOffset()<Math.max(jan.getTimezoneOffset(),jul.getTimezoneOffset())?'✓ Ja':'✗ Nein');
+  set('date-format',new Date(2025,0,15).toLocaleDateString(navigator.language||'de-DE'));
+  set('weekday',new Date().toLocaleDateString('de-DE',{weekday:'long'}));
+}
+function gatherStorage(){
+  set('localstorage',typeof localStorage!=='undefined'?'✓ Verfügbar':'✗ Gesperrt','accent');
+  set('sessionstorage',typeof sessionStorage!=='undefined'?'✓ Verfügbar':'✗ Gesperrt','accent');
+  try{set('indexeddb',window.indexedDB?'✓ Verfügbar':'✗ Gesperrt','accent');}catch(e){set('indexeddb','✗ Gesperrt','danger');}
+  set('sw','serviceWorker' in navigator?'✓ Unterstützt':'—');
+  set('wasm',typeof WebAssembly!=='undefined'?'✓ Unterstützt':'—','accent');
+  set('online',navigator.onLine?'✓ Online':'✗ Offline',navigator.onLine?'accent':'danger');
+  set('https',location.protocol==='https:'?'✓ Gesichert':'⚠ Ungesichert',location.protocol==='https:'?'accent':'warn');
+}
+function gatherNetwork(){
+  const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if(c){set('conn-type',c.type||'—');set('conn-eff',c.effectiveType||'—');set('bandwidth',c.downlink!=null?c.downlink+' Mbit/s':'—');set('rtt',c.rtt!=null?c.rtt+' ms':'—');set('data-saver',c.saveData?'✓ Aktiv':'✗ Inaktiv');}
+  else ['conn-type','conn-eff','bandwidth','rtt','data-saver'].forEach(id=>set(id,'Nicht verfügbar'));
+}
+function gatherWebGL(){
+  try{
+    const c=document.createElement('canvas');
+    const gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+    if(!gl){set('webgl','✗ Nicht verfügbar','danger');return;}
+    set('webgl','✓ Unterstützt','accent');
+    const ext=gl.getExtension('WEBGL_debug_renderer_info');
+    set('webgl-renderer',(ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER))||'—');
+    const v=(ext?gl.getParameter(ext.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR))||'—';
+    set('webgl-vendor',v);set('gpu',$('webgl-renderer').textContent);
+  }catch(e){set('webgl','Fehler','danger');}
+}
+function gatherCanvas(){
+  try{
+    const c=document.createElement('canvas');c.width=240;c.height=36;
+    const ctx=c.getContext('2d');
+    ctx.textBaseline='top';ctx.font='14px Arial';
+    ctx.fillStyle='#f60';ctx.fillRect(125,1,62,20);
+    ctx.fillStyle='#069';ctx.fillText('WhoAmIWeb 🔍',2,15);
+    ctx.fillStyle='rgba(102,204,0,.7)';ctx.fillText('WhoAmIWeb 🔍',4,17);
+    const hash=h32(c.toDataURL());
+    set('canvas-fp','✓ Unterstützt','accent');set('canvas-hash',hash);return hash;
+  }catch(e){set('canvas-fp','Fehler');return '';}
+}
+async function gatherAudio(){
+  try{
+    const ctx=new(window.OfflineAudioContext||window.webkitOfflineAudioContext)(1,44100,44100);
+    const osc=ctx.createOscillator(),comp=ctx.createDynamicsCompressor();
+    osc.connect(comp);comp.connect(ctx.destination);osc.start(0);
+    const buf=await ctx.startRendering(),d=buf.getChannelData(0);
+    let s=0;for(let i=0;i<500;i++)s+=Math.abs(d[i]);
+    const hex='0x'+(s*1e6|0).toString(16).toUpperCase().padStart(8,'0');
+    set('audio-api','✓ Unterstützt','accent');set('audio-hash',hex);return hex;
+  }catch(e){set('audio-api','Nicht verfügbar');return '';}
+}
+function detectFonts(){
+  const list=['Arial','Verdana','Georgia','Times New Roman','Courier New','Trebuchet MS','Comic Sans MS','Impact','Helvetica Neue','Palatino','Garamond','Tahoma','Century Gothic','Lucida Console','Monaco','Consolas','Calibri','Cambria','Segoe UI','Ubuntu','Futura','Gill Sans','Optima'];
+  const c=document.createElement('canvas'),ctx=c.getContext('2d');
+  ctx.font='72px monospace';const bw=ctx.measureText('mmmmmmmmmmlli').width;
+  const found=list.filter(f=>{ctx.font=`72px '${f}',monospace`;return ctx.measureText('mmmmmmmmmmlli').width!==bw;});
+  set('fonts',found.length?found.join(', '):'— (keine erkannt)');
+  const fh=h32(found.join('|'));set('font-hash',fh);return found.join('|');
+}
+async function checkPermissions(){
+  for(const[name,id]of[['camera','camera'],['microphone','mic'],['notifications','notifs'],['geolocation','geo-api']]){
+    try{const r=await navigator.permissions.query({name});set(id,r.state==='granted'?'✓ Erlaubt':r.state==='denied'?'✗ Verweigert':'⚠ Nicht gefragt',r.state==='granted'?'warn':r.state==='denied'?'danger':'');}
+    catch(e){set(id,'Nicht prüfbar');}
+  }
+}
+async function gatherBattery(){
+  try{
+    const b=await navigator.getBattery();const p=Math.round(b.level*100);
+    set('battery',p+'%',p<20?'danger':'accent');
+    set('battery-charging',b.charging?'✓ Wird geladen':'✗ Nicht geladen',b.charging?'accent':'');
+    set('battery-time',b.charging?(b.chargingTime===Infinity?'Vollständig':Math.round(b.chargingTime/60)+' min bis voll'):(b.dischargingTime===Infinity?'Unbekannt':Math.round(b.dischargingTime/60)+' min verbl.'));
+  }catch(e){['battery','battery-charging','battery-time'].forEach(id=>set(id,'Nicht verfügbar'));}
+}
+async function gatherStorageEst(){
+  try{const e=await navigator.storage.estimate();set('storage-est',e.quota?(e.quota/1e9).toFixed(1)+' GB':'—');set('storage-free',(e.usage!=null&&e.quota)?((e.quota-e.usage)/1e9).toFixed(2)+' GB frei':'—');}catch(e){}
+}
+function detectAdBlock(){
+  const b=document.createElement('div');b.className='ad banner ads advertisement';b.style.cssText='position:absolute;top:-9999px;height:1px;width:1px;';
+  document.body.appendChild(b);const blocked=b.offsetParent===null||!b.clientWidth;b.remove();
+  set('adblock',blocked?'✓ Erkannt':'✗ Nicht erkannt',blocked?'warn':'accent');
+}
+async function detectIncognito(){
+  try{const fs=window.RequestFileSystem||window.webkitRequestFileSystem;if(!fs){set('incognito','Nicht prüfbar');return;}await new Promise((r,j)=>fs(window.TEMPORARY,100,r,j));set('incognito','✗ Normal-Modus','accent');}
+  catch(e){set('incognito','⚠ Möglicherweise Inkognito','warn');}
+}
+function detectWebRTC(){
+  if(!window.RTCPeerConnection){set('webrtc-local','Nicht unterstützt');set('webrtc-public','Nicht unterstützt');return;}
+  const pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  const lo=new Set(),pu=new Set();
+  pc.createDataChannel('');
+  pc.onicecandidate=e=>{
+    if(!e.candidate)return;
+    const m=e.candidate.candidate.match(/(\d{1,3}(\.\d{1,3}){3}|[\da-f:]{2,39})/gi);
+    if(!m)return;
+    m.forEach(ip=>{if(/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(ip))lo.add(ip);else if(!ip.startsWith('0.0.0.0')&&ip!=='::1')pu.add(ip);});
+    set('webrtc-local',lo.size?[...lo].join(', '):'— (kein Leak)',lo.size?'danger':'accent');
+    set('webrtc-public',pu.size?[...pu].join(', '):'— (kein Leak)',pu.size?'danger':'accent');
+  };
+  pc.createOffer().then(o=>pc.setLocalDescription(o));
+  setTimeout(()=>pc.close(),6000);
+}
+function gatherPlugins(){
+  const ps=Array.from(navigator.plugins||[]),tbody=$('plugin-rows');
+  if(!ps.length){tbody.innerHTML='<tr><td colspan="3" style="color:var(--text2)">Keine Plugins erkannt</td></tr>';return;}
+  tbody.innerHTML=ps.map(p=>`<tr><td>${p.name}</td><td style="color:var(--text2);font-size:.65rem">${p.description||'—'}</td><td style="color:var(--text2);font-size:.65rem">${Array.from(p).map(m=>m.type).join(', ')||'—'}</td></tr>`).join('');
+  set('font-hash',h32(ps.map(p=>p.name).join('|')));
+}
+
+/* ─── Main ───────────────────────────────────────────────────────────────── */
+async function init() {
+  // Instant local data
+  parseUA(); gatherSystem(); gatherScreen(); gatherTime();
+  gatherStorage(); gatherNetwork(); gatherWebGL();
+  detectAdBlock(); gatherPlugins(); detectWebRTC();
+
+  // Fire geo + IPv6 in parallel
+  let geoData, ipv6;
+  try {
+    [geoData, ipv6] = await Promise.all([ fetchGeoIP(), detectIPv6() ]);
+  } catch(e) {
+    console.error('Geo failed:', e);
+    $('ip-box').textContent = 'Fehler';
+    $('ip-box').style.color = 'var(--red)';
+    $('map-loading').innerHTML = `<span style="color:var(--red)">⚠ IP-Geo nicht verfügbar: ${e.message}</span>`;
+    ['ip4','ip6','isp','asn','city','region','country','coords'].forEach(id=>set(id,'Fehler','danger'));
+    geoData = null;
+  }
+
+  if (geoData) {
+    // Reverse DNS runs after we have the IP
+    const rdns = await reverseDNS(geoData.ip);
+    const { lat, lon, city, country, ip, isp } = renderGeo(geoData, ipv6, rdns);
+    initMap(lat, lon, city, country, ip, isp);
+  }
+
+  // Slow fingerprinting runs last, in parallel
+  const [audioHash] = await Promise.all([
+    gatherAudio(), detectIncognito(), checkPermissions(), gatherBattery(), gatherStorageEst()
+  ]);
+  const canvasHash = gatherCanvas();
+  const fontStr    = detectFonts();
+
+  set('fp-hash', h32([
+    navigator.userAgent,
+    screen.width+'x'+screen.height+'x'+(window.devicePixelRatio||1),
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    navigator.language,
+    canvasHash, audioHash||'', fontStr,
+    navigator.hardwareConcurrency||'', navigator.deviceMemory||''
+  ].join('|')), 'accent');
+}
+
+init();
+</script>
+</body>
+</html>
